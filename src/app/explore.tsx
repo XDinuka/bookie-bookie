@@ -1,180 +1,335 @@
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ExternalLink } from '@/components/external-link';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { addBook, findBookByIsbn } from '@/lib/book-store';
+import { isValidIsbn, lookupIsbn, normalizeIsbn } from '@/lib/isbn';
 
-export default function TabTwoScreen() {
+type Draft = {
+  isbn: string;
+  title: string;
+  author: string;
+  coverUrl: string | null;
+  foundOnline: boolean;
+};
+
+type Stage =
+  | { kind: 'scanning' }
+  | { kind: 'looking-up'; isbn: string }
+  | { kind: 'duplicate'; isbn: string; title: string }
+  | { kind: 'confirm' }
+  | { kind: 'added'; title: string };
+
+export default function ScanScreen() {
+  const theme = useTheme();
   const safeAreaInsets = useSafeAreaInsets();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [stage, setStage] = useState<Stage>({ kind: 'scanning' });
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [manualIsbn, setManualIsbn] = useState('');
+  const processingRef = useRef(false);
+
   const insets = {
     ...safeAreaInsets,
     bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
   };
-  const theme = useTheme();
-
   const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
+    android: { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right },
+    web: { paddingTop: Spacing.six },
   });
 
+  function resetScan() {
+    processingRef.current = false;
+    setDraft(null);
+    setManualIsbn('');
+    setStage({ kind: 'scanning' });
+  }
+
+  async function handleIsbnDetected(rawIsbn: string) {
+    if (processingRef.current) return;
+    const isbn = normalizeIsbn(rawIsbn);
+    if (!isValidIsbn(isbn)) return;
+
+    processingRef.current = true;
+
+    const existing = findBookByIsbn(isbn);
+    if (existing) {
+      setStage({ kind: 'duplicate', isbn, title: existing.title });
+      return;
+    }
+
+    setStage({ kind: 'looking-up', isbn });
+    const result = await lookupIsbn(isbn);
+    setDraft({
+      isbn,
+      title: result?.title ?? '',
+      author: result?.author ?? '',
+      coverUrl: result?.coverUrl ?? null,
+      foundOnline: result != null,
+    });
+    setStage({ kind: 'confirm' });
+  }
+
+  function handleBarcodeScanned(result: BarcodeScanningResult) {
+    if (stage.kind !== 'scanning') return;
+    handleIsbnDetected(result.data);
+  }
+
+  async function handleAdd() {
+    if (!draft || !draft.title.trim()) return;
+    await addBook({
+      isbn: draft.isbn,
+      title: draft.title.trim(),
+      author: draft.author.trim() || null,
+      coverUrl: draft.coverUrl,
+    });
+    setStage({ kind: 'added', title: draft.title.trim() });
+    setTimeout(resetScan, 1200);
+  }
+
+  const manualEntry = (
+    <View style={styles.manualRow}>
+      <ThemedText type="small" themeColor="textSecondary">
+        Or enter the ISBN manually
+      </ThemedText>
+      <View style={styles.manualInputRow}>
+        <TextInput
+          value={manualIsbn}
+          onChangeText={setManualIsbn}
+          placeholder="e.g. 9780140449136"
+          placeholderTextColor={theme.textSecondary}
+          keyboardType="number-pad"
+          style={[
+            styles.manualInput,
+            { color: theme.text, backgroundColor: theme.backgroundElement },
+          ]}
+        />
+        <Pressable
+          disabled={!isValidIsbn(normalizeIsbn(manualIsbn))}
+          onPress={() => handleIsbnDetected(manualIsbn)}
+          style={({ pressed }) => [
+            styles.lookupButton,
+            { backgroundColor: theme.backgroundSelected },
+            (pressed || !isValidIsbn(normalizeIsbn(manualIsbn))) && styles.pressed,
+          ]}>
+          <ThemedText type="smallBold">Look up</ThemedText>
+        </Pressable>
+      </View>
+    </View>
+  );
+
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <View
+      style={[styles.container, { backgroundColor: theme.background }, contentPlatformStyle]}>
+      <View style={styles.inner}>
+        <ThemedText type="subtitle">Scan a Book</ThemedText>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
+        {!permission ? (
+          <ActivityIndicator />
+        ) : !permission.granted ? (
+          <ThemedView type="backgroundElement" style={styles.permissionCard}>
+            <ThemedText type="small" style={styles.centerText}>
+              Camera access is needed to scan a book&apos;s barcode.
+            </ThemedText>
+            <Pressable
+              onPress={requestPermission}
+              style={({ pressed }) => [
+                styles.lookupButton,
+                { backgroundColor: theme.backgroundSelected },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="smallBold">Grant camera access</ThemedText>
             </Pressable>
-          </ExternalLink>
-        </ThemedView>
-
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
+          </ThemedView>
+        ) : stage.kind === 'scanning' ? (
+          <View style={styles.cameraCard}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8'] }}
+              onBarcodeScanned={handleBarcodeScanned}
+            />
+            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              Point the camera at the book&apos;s barcode (usually on the back cover).
             </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
+          </View>
+        ) : stage.kind === 'looking-up' ? (
+          <ThemedView type="backgroundElement" style={styles.permissionCard}>
+            <ActivityIndicator />
+            <ThemedText type="small" themeColor="textSecondary">
+              Looking up ISBN {stage.isbn}…
             </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
-
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
+          </ThemedView>
+        ) : stage.kind === 'duplicate' ? (
+          <ThemedView type="backgroundElement" style={styles.permissionCard}>
+            <ThemedText type="smallBold" style={styles.centerText}>
+              &ldquo;{stage.title}&rdquo; is already in your library
             </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
+            <ThemedText type="code" themeColor="textSecondary">
+              ISBN {stage.isbn}
             </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
-
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
+            <Pressable
+              onPress={resetScan}
+              style={({ pressed }) => [
+                styles.lookupButton,
+                { backgroundColor: theme.backgroundSelected },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="smallBold">Scan another</ThemedText>
+            </Pressable>
+          </ThemedView>
+        ) : stage.kind === 'confirm' && draft ? (
+          <ThemedView type="backgroundElement" style={styles.confirmCard}>
+            {draft.coverUrl ? (
+              <Image source={{ uri: draft.coverUrl }} style={styles.confirmCover} contentFit="cover" />
+            ) : null}
+            <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+              {draft.foundOnline
+                ? 'Found online — edit details if needed.'
+                : "Couldn't find this ISBN online. Enter the details manually."}
             </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+            <TextInput
+              value={draft.title}
+              onChangeText={(title) => setDraft((current) => (current ? { ...current, title } : current))}
+              placeholder="Title"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.confirmInput, { color: theme.text, backgroundColor: theme.background }]}
+            />
+            <TextInput
+              value={draft.author}
+              onChangeText={(author) => setDraft((current) => (current ? { ...current, author } : current))}
+              placeholder="Author"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.confirmInput, { color: theme.text, backgroundColor: theme.background }]}
+            />
+            <ThemedText type="code" themeColor="textSecondary">
+              ISBN {draft.isbn}
+            </ThemedText>
+            <View style={styles.confirmButtonRow}>
+              <Pressable
+                onPress={resetScan}
+                style={({ pressed }) => [styles.confirmButton, pressed && styles.pressed]}>
+                <ThemedText type="smallBold" themeColor="textSecondary">
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                disabled={!draft.title.trim()}
+                onPress={handleAdd}
+                style={({ pressed }) => [
+                  styles.confirmButton,
+                  styles.addButton,
+                  { backgroundColor: theme.backgroundSelected },
+                  (pressed || !draft.title.trim()) && styles.pressed,
+                ]}>
+                <ThemedText type="smallBold">Add to Library</ThemedText>
+              </Pressable>
+            </View>
+          </ThemedView>
+        ) : stage.kind === 'added' ? (
+          <ThemedView type="backgroundElement" style={styles.permissionCard}>
+            <ThemedText type="smallBold">Added &ldquo;{stage.title}&rdquo; to your library</ThemedText>
+          </ThemedView>
+        ) : null}
+
+        {stage.kind === 'scanning' || !permission?.granted ? manualEntry : null}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
   container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
+    flex: 1,
     alignItems: 'center',
+  },
+  inner: {
+    flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+    gap: Spacing.four,
   },
-  centerText: {
-    textAlign: 'center',
+  cameraCard: {
+    gap: Spacing.three,
   },
-  pressed: {
-    opacity: 0.7,
+  camera: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: Spacing.three,
+    overflow: 'hidden',
   },
-  linkButton: {
+  permissionCard: {
+    borderRadius: Spacing.three,
+    padding: Spacing.four,
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  confirmCard: {
+    borderRadius: Spacing.three,
+    padding: Spacing.four,
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  confirmCover: {
+    width: 96,
+    height: 144,
+    borderRadius: Spacing.two,
+  },
+  confirmInput: {
+    width: '100%',
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    fontSize: 16,
+  },
+  confirmButtonRow: {
     flexDirection: 'row',
+    gap: Spacing.three,
+    marginTop: Spacing.one,
+  },
+  confirmButton: {
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
     borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+  addButton: {},
+  centerText: {
+    textAlign: 'center',
   },
-  collapsibleContent: {
-    alignItems: 'center',
+  manualRow: {
+    gap: Spacing.two,
   },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
+  manualInputRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  manualInput: {
+    flex: 1,
     borderRadius: Spacing.three,
-    marginTop: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    fontSize: 16,
   },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+  lookupButton: {
+    paddingHorizontal: Spacing.four,
+    justifyContent: 'center',
+    borderRadius: Spacing.three,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

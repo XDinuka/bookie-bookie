@@ -1,98 +1,137 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useMemo, useState } from 'react';
+import { FlatList, Platform, StyleSheet, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
+import { BookRow } from '@/components/book-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { removeBook, useBooks, useBooksLoaded } from '@/lib/book-store';
+import type { Book } from '@/types/book';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
+export default function LibraryScreen() {
+  const books = useBooks();
+  const loaded = useBooksLoaded();
+  const theme = useTheme();
+  const safeAreaInsets = useSafeAreaInsets();
+  const [query, setQuery] = useState('');
+
+  const insets = {
+    ...safeAreaInsets,
+    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+  };
+
+  const contentPlatformStyle = Platform.select({
+    android: {
+      paddingTop: insets.top,
+      paddingLeft: insets.left,
+      paddingRight: insets.right,
+      paddingBottom: insets.bottom,
+    },
+    web: {
+      paddingTop: Spacing.six,
+      paddingBottom: Spacing.four,
+    },
+  });
+
+  const filteredBooks = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return books;
+    return books.filter((book) =>
+      [book.title, book.author, book.isbn]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(normalizedQuery))
     );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+  }, [books, query]);
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
+  const renderEmptyState = () => {
+    if (!loaded) return null;
+    if (books.length === 0) {
+      return (
+        <ThemedView type="backgroundElement" style={styles.emptyState}>
+          <ThemedText type="smallBold">Your library is empty</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+            Head to the Scan tab and scan a book&apos;s barcode to add it here.
           </ThemedText>
         </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
+      );
+    }
+    return (
+      <ThemedView type="backgroundElement" style={styles.emptyState}>
+        <ThemedText type="small" themeColor="textSecondary">
+          No books match &ldquo;{query}&rdquo;
         </ThemedText>
+      </ThemedView>
+    );
+  };
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
+  return (
+    <FlatList<Book>
+      style={[styles.list, { backgroundColor: theme.background }]}
+      contentInset={insets}
+      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}
+      data={filteredBooks}
+      keyExtractor={(book) => book.id}
+      ListHeaderComponent={
+        <ThemedView style={styles.header}>
+          <ThemedText type="subtitle">My Library</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {books.length} {books.length === 1 ? 'book' : 'books'} cataloged
+          </ThemedText>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search by title, author, or ISBN"
+            placeholderTextColor={theme.textSecondary}
+            style={[
+              styles.searchInput,
+              { color: theme.text, backgroundColor: theme.backgroundElement },
+            ]}
           />
         </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      }
+      renderItem={({ item }) => (
+        <BookRow book={item} onDelete={() => removeBook(item.id)} />
+      )}
+      ItemSeparatorComponent={() => <ThemedView style={styles.separator} />}
+      ListEmptyComponent={renderEmptyState}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  list: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
   },
-  safeArea: {
-    flex: 1,
+  contentContainer: {
     paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
     maxWidth: MaxContentWidth,
+    width: '100%',
+    alignSelf: 'center',
+    flexGrow: 1,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  header: {
+    gap: Spacing.two,
+    paddingBottom: Spacing.four,
   },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
+  searchInput: {
+    marginTop: Spacing.two,
+    borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    paddingVertical: Spacing.two,
+    fontSize: 16,
+  },
+  separator: {
+    height: Spacing.two,
+  },
+  emptyState: {
+    borderRadius: Spacing.three,
+    padding: Spacing.four,
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  centerText: {
+    textAlign: 'center',
   },
 });
