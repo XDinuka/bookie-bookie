@@ -1,5 +1,6 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -91,6 +92,20 @@ export default function ScanScreen() {
   function handleBarcodeScanned(result: BarcodeScanningResult) {
     if (stage.kind !== 'scanning') return;
     handleIsbnDetected(result.data);
+  }
+
+  async function handleTakeCoverPhoto() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [2, 3],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setDraft((current) => (current ? { ...current, coverUrl: result.assets[0].uri } : current));
   }
 
   async function handleAdd() {
@@ -207,7 +222,16 @@ export default function ScanScreen() {
           <ThemedView type="backgroundElement" style={styles.confirmCard}>
             {draft.coverUrl ? (
               <Image source={{ uri: draft.coverUrl }} style={styles.confirmCover} contentFit="cover" />
-            ) : null}
+            ) : (
+              <View style={[styles.confirmCover, styles.coverPlaceholder, { backgroundColor: theme.backgroundSelected }]} />
+            )}
+            <Pressable
+              onPress={handleTakeCoverPhoto}
+              style={({ pressed }) => pressed && styles.pressed}>
+              <ThemedText type="linkPrimary">
+                {draft.coverUrl ? 'Retake cover photo' : 'Take a photo of the cover'}
+              </ThemedText>
+            </Pressable>
             <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
               {draft.foundOnline
                 ? 'Found online — edit details if needed.'
@@ -300,6 +324,11 @@ const styles = StyleSheet.create({
     width: 96,
     height: 144,
     borderRadius: Spacing.two,
+  },
+  coverPlaceholder: {
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    borderColor: 'rgba(128,128,128,0.4)',
   },
   confirmInput: {
     width: '100%',
