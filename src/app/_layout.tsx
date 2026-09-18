@@ -5,6 +5,7 @@ import { enableScreens } from 'react-native-screens';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { OcrWorker } from '@/components/ocr-worker';
+import { useOcrWorkerActive } from '@/lib/ocr-queue';
 
 // react-native-screens' native Fragment-based Screen is currently fighting
 // Android's edge-to-edge enforcement (an active, documented issue across
@@ -18,10 +19,11 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const ocrWorkerActive = useOcrWorkerActive();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AnimatedSplashOverlay />
-      <OcrWorker />
+      {ocrWorkerActive ? <OcrWorker /> : null}
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="book/[id]" options={{ title: 'Review Book' }} />

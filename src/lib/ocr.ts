@@ -75,6 +75,11 @@ export function registerOcrWorker(post: (message: string) => void) {
 
 export function unregisterOcrWorker() {
   postToWorker = null;
+  // The worker is unmounted between OCR jobs (see ocr-queue.ts); reset so
+  // the next mount's own "ready" message is waited for instead of reusing
+  // a stale ready/error flag from the previous instance.
+  workerReady = false;
+  workerInitError = null;
 }
 
 export function markOcrWorkerReady() {

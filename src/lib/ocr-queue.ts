@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react';
+
 import { updateBook } from '@/lib/book-store';
 import { isSriLankanIsbn, lookupIsbn } from '@/lib/isbn';
 import { runOcr } from '@/lib/ocr';
@@ -7,6 +9,31 @@ type Job = { bookId: string; photoUris: string[] };
 
 const queue: Job[] = [];
 let processing = false;
+const activeListeners = new Set<() => void>();
+
+// The OCR worker (a hidden WebView) is only mounted while this is true. On
+// Android, merely having a WebView present in the tree — even hidden and
+// zero-sized — can put the Activity window into keyboard-resize behavior,
+// squeezing all app content into the remaining space. Keeping it unmounted
+// except while a job is actually in flight avoids that everywhere else.
+function setActive(active: boolean) {
+  if (active === isOcrWorkerActive()) return;
+  processing = active;
+  for (const listener of activeListeners) listener();
+}
+
+function isOcrWorkerActive() {
+  return processing;
+}
+
+function subscribeActive(listener: () => void) {
+  activeListeners.add(listener);
+  return () => activeListeners.delete(listener);
+}
+
+export function useOcrWorkerActive() {
+  return useSyncExternalStore(subscribeActive, isOcrWorkerActive);
+}
 
 /** Fire-and-forget: the caller (the capture screen) moves on immediately. */
 export function enqueueOcrJob(job: Job) {
@@ -16,12 +43,12 @@ export function enqueueOcrJob(job: Job) {
 
 async function processQueue() {
   if (processing) return;
-  processing = true;
+  setActive(true);
   while (queue.length > 0) {
     const job = queue.shift()!;
     await processJob(job);
   }
-  processing = false;
+  setActive(false);
 }
 
 async function processJob(job: Job) {
