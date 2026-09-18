@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookRow } from '@/components/book-row';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { removeBook, useBooks, useBooksLoaded } from '@/lib/book-store';
 import type { Book } from '@/types/book';
@@ -20,7 +20,7 @@ export default function LibraryScreen() {
 
   const insets = {
     ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+    bottom: safeAreaInsets.bottom + Spacing.three,
   };
 
   const contentPlatformStyle = Platform.select({

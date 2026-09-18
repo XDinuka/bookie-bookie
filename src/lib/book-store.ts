@@ -37,18 +37,20 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+const EMPTY_BOOKS: Book[] = [];
+
 export function useBooks() {
   useEffect(() => {
     ensureLoaded();
   }, []);
-  return useSyncExternalStore(subscribe, () => books);
+  return useSyncExternalStore(subscribe, () => books, () => EMPTY_BOOKS);
 }
 
 export function useBooksLoaded() {
   useEffect(() => {
     ensureLoaded();
   }, []);
-  return useSyncExternalStore(subscribe, () => loaded);
+  return useSyncExternalStore(subscribe, () => loaded, () => false);
 }
 
 export function useBook(id: string) {

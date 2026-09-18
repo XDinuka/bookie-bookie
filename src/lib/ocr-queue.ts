@@ -32,7 +32,7 @@ function subscribeActive(listener: () => void) {
 }
 
 export function useOcrWorkerActive() {
-  return useSyncExternalStore(subscribeActive, isOcrWorkerActive);
+  return useSyncExternalStore(subscribeActive, isOcrWorkerActive, () => false);
 }
 
 /** Fire-and-forget: the caller (the capture screen) moves on immediately. */

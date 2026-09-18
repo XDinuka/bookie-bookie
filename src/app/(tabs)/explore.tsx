@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookConfirmCard, type BookDraft } from '@/components/book-confirm-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addBook, findBookByIsbn } from '@/lib/book-store';
 import { isValidIsbn, lookupIsbn, normalizeIsbn } from '@/lib/isbn';
@@ -26,12 +26,12 @@ export default function ScanScreen() {
   const processingRef = useRef(false);
   const requestIdRef = useRef(0);
 
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
-  };
   const contentPlatformStyle = Platform.select({
-    android: { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right },
+    android: {
+      paddingTop: safeAreaInsets.top,
+      paddingLeft: safeAreaInsets.left,
+      paddingRight: safeAreaInsets.right,
+    },
     web: { paddingTop: Spacing.six },
   });
 
