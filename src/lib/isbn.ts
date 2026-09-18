@@ -18,8 +18,20 @@ type OpenLibraryEntry = {
   cover?: { small?: string; medium?: string; large?: string };
 };
 
+const LOOKUP_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function lookupOpenLibrary(isbn: string): Promise<IsbnLookupResult | null> {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`
   );
   if (!response.ok) return null;
@@ -45,7 +57,9 @@ type GoogleBooksResponse = {
 };
 
 async function lookupGoogleBooks(isbn: string): Promise<IsbnLookupResult | null> {
-  const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+  const response = await fetchWithTimeout(
+    `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`
+  );
   if (!response.ok) return null;
   const data = (await response.json()) as GoogleBooksResponse;
   const info = data.items?.[0]?.volumeInfo;

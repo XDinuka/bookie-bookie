@@ -41,6 +41,7 @@ export default function ScanScreen() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [manualIsbn, setManualIsbn] = useState('');
   const processingRef = useRef(false);
+  const requestIdRef = useRef(0);
 
   const insets = {
     ...safeAreaInsets,
@@ -52,6 +53,7 @@ export default function ScanScreen() {
   });
 
   function resetScan() {
+    requestIdRef.current += 1; // invalidate any in-flight lookup
     processingRef.current = false;
     setDraft(null);
     setManualIsbn('');
@@ -64,6 +66,7 @@ export default function ScanScreen() {
     if (!isValidIsbn(isbn)) return;
 
     processingRef.current = true;
+    const requestId = requestIdRef.current;
 
     const existing = findBookByIsbn(isbn);
     if (existing) {
@@ -73,6 +76,8 @@ export default function ScanScreen() {
 
     setStage({ kind: 'looking-up', isbn });
     const result = await lookupIsbn(isbn);
+    if (requestIdRef.current !== requestId) return; // cancelled while looking up
+
     setDraft({
       isbn,
       title: result?.title ?? '',
@@ -172,6 +177,13 @@ export default function ScanScreen() {
             <ThemedText type="small" themeColor="textSecondary">
               Looking up ISBN {stage.isbn}…
             </ThemedText>
+            <Pressable
+              onPress={resetScan}
+              style={({ pressed }) => [styles.confirmButton, pressed && styles.pressed]}>
+              <ThemedText type="smallBold" themeColor="textSecondary">
+                Cancel
+              </ThemedText>
+            </Pressable>
           </ThemedView>
         ) : stage.kind === 'duplicate' ? (
           <ThemedView type="backgroundElement" style={styles.permissionCard}>
