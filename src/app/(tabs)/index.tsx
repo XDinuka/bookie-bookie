@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Platform, StyleSheet, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -52,7 +53,7 @@ export default function LibraryScreen() {
         <ThemedView type="backgroundElement" style={styles.emptyState}>
           <ThemedText type="smallBold">Your library is empty</ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
-            Head to the Scan tab and scan a book&apos;s barcode to add it here.
+            Scan a barcode, or use the Add tab to capture photos or type an ISBN.
           </ThemedText>
         </ThemedView>
       );
@@ -92,7 +93,11 @@ export default function LibraryScreen() {
         </ThemedView>
       }
       renderItem={({ item }) => (
-        <BookRow book={item} onDelete={() => removeBook(item.id)} />
+        <BookRow
+          book={item}
+          onPress={() => router.push(`/book/${item.id}`)}
+          onDelete={() => removeBook(item.id)}
+        />
       )}
       ItemSeparatorComponent={() => <ThemedView style={styles.separator} />}
       ListEmptyComponent={renderEmptyState}

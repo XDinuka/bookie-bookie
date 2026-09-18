@@ -6,6 +6,19 @@ export function isValidIsbn(isbn: string) {
   return isbn.length === 10 || isbn.length === 13;
 }
 
+const SRI_LANKA_GROUP = '955';
+
+/**
+ * Sri Lanka's ISBN registration group ("955") has essentially no coverage in
+ * Open Library or Google Books, so callers use this to skip the online
+ * lookup for those books rather than wait out a lookup that will fail.
+ */
+export function isSriLankanIsbn(isbn: string) {
+  if (isbn.length === 13) return isbn.slice(3, 6) === SRI_LANKA_GROUP;
+  if (isbn.length === 10) return isbn.slice(0, 3) === SRI_LANKA_GROUP;
+  return false;
+}
+
 export type IsbnLookupResult = {
   title: string;
   author: string | null;
