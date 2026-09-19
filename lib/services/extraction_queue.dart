@@ -7,12 +7,11 @@ import 'text_extraction_service.dart';
 /// they land.
 class ExtractionQueue {
   ExtractionQueue({
-    required BookRepository repository,
+    required this.repository,
     TextExtractor? extractor,
-  }) : _repository = repository,
-       _extractor = extractor ?? NoOpTextExtractor();
+  }) : _extractor = extractor ?? NoOpTextExtractor();
 
-  final BookRepository _repository;
+  final BookRepository repository;
   final TextExtractor _extractor;
 
   Future<void> _tail = Future.value();
@@ -27,10 +26,10 @@ class ExtractionQueue {
     final result = await _extractor.extract(photoPaths);
     if (result.isEmpty) return;
 
-    final book = await _repository.getById(bookId);
+    final book = await repository.getById(bookId);
     if (book == null) return; // deleted while extraction was running
 
-    await _repository.update(
+    await repository.update(
       book.copyWith(
         title: result.title ?? book.title,
         author: result.author ?? book.author,
