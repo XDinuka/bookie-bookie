@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../data/book_repository.dart';
 import '../models/book.dart';
 import '../services/isbn_lookup_service.dart';
+import '../services/isbn_utils.dart';
 import '../services/photo_storage_service.dart';
 
 /// Create-or-edit form for a single catalog entry.
@@ -51,6 +52,11 @@ class _BookFormScreenState extends State<BookFormScreen> {
   int? _authorLineIndex;
   int? _isbnLineIndex;
 
+  // Line index -> the ISBN-shaped substring a regex found in that line, if
+  // any. An ISBN barcode is unambiguous enough to detect automatically,
+  // unlike title/author which genuinely need a human to pick.
+  final Map<int, String> _isbnCandidates = {};
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +74,23 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _coverUrl = existing?.coverUrl ?? widget.initialMetadata?.coverUrl;
     _extraPhotoPaths = existing?.extraPhotoPaths ?? const [];
     _ocrLines = existing?.ocrLines ?? const [];
+
+    for (var i = 0; i < _ocrLines.length; i++) {
+      final found = IsbnUtils.extractCandidates(_ocrLines[i]);
+      if (found.isNotEmpty) _isbnCandidates[i] = found.first;
+    }
+
+    // Auto-fill the ISBN field when every detected candidate agrees on the
+    // same number — still just a suggestion (the user can pick a different
+    // line's chip instead), but a confident, unambiguous one.
+    if (_isbnController.text.isEmpty && _isbnCandidates.isNotEmpty) {
+      final distinct = _isbnCandidates.values.toSet();
+      if (distinct.length == 1) {
+        final firstIndex = _isbnCandidates.keys.first;
+        _isbnController.text = _isbnCandidates[firstIndex]!;
+        _isbnLineIndex = firstIndex;
+      }
+    }
   }
 
   @override
@@ -93,17 +116,19 @@ class _BookFormScreenState extends State<BookFormScreen> {
   }
 
   void _assignLine(int index, _OcrField field) {
-    final text = _ocrLines[index];
     setState(() {
       switch (field) {
         case _OcrField.title:
-          _titleController.text = text;
+          _titleController.text = _ocrLines[index];
           _titleLineIndex = index;
         case _OcrField.author:
-          _authorController.text = text;
+          _authorController.text = _ocrLines[index];
           _authorLineIndex = index;
         case _OcrField.isbn:
-          _isbnController.text = text;
+          // Prefer the extracted digits over the raw line — the line might
+          // read "ISBN 978-955-20-1234-5" and the field wants just the
+          // number.
+          _isbnController.text = _isbnCandidates[index] ?? _ocrLines[index];
           _isbnLineIndex = index;
       }
     });
@@ -215,6 +240,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
             for (var index = 0; index < _ocrLines.length; index++)
               _OcrLineCard(
                 text: _ocrLines[index],
+                isbnCandidate: _isbnCandidates[index],
                 titleSelected: _titleLineIndex == index,
                 authorSelected: _authorLineIndex == index,
                 isbnSelected: _isbnLineIndex == index,
@@ -332,6 +358,7 @@ enum _OcrField { title, author, isbn }
 class _OcrLineCard extends StatelessWidget {
   const _OcrLineCard({
     required this.text,
+    this.isbnCandidate,
     required this.titleSelected,
     required this.authorSelected,
     required this.isbnSelected,
@@ -339,6 +366,7 @@ class _OcrLineCard extends StatelessWidget {
   });
 
   final String text;
+  final String? isbnCandidate;
   final bool titleSelected;
   final bool authorSelected;
   final bool isbnSelected;
@@ -354,6 +382,14 @@ class _OcrLineCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(text),
+            if (isbnCandidate != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Looks like ISBN $isbnCandidate',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(fontStyle: FontStyle.italic),
+              ),
+            ],
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,

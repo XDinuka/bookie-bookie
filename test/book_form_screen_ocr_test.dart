@@ -49,10 +49,13 @@ void main() {
     tester,
   ) async {
     final repository = InMemoryBookRepository();
+    // A third line that isn't ISBN-shaped, so this test stays focused on
+    // generic tap-to-assign and doesn't overlap with the auto-fill tests
+    // below.
     final book = await insertBookWithLines(repository, [
       'The Great Gatsby',
       'F. Scott Fitzgerald',
-      '9780743273565',
+      'Some publisher note',
     ]);
 
     await tester.pumpWidget(
@@ -66,7 +69,7 @@ void main() {
     // All three detected lines should be shown for the user to pick from.
     expect(find.text('The Great Gatsby'), findsOneWidget);
     expect(find.text('F. Scott Fitzgerald'), findsOneWidget);
-    expect(find.text('9780743273565'), findsOneWidget);
+    expect(find.text('Some publisher note'), findsOneWidget);
 
     // Fields start blank.
     expect(findFieldLabeled(tester, 'Title').controller?.text, isEmpty);
@@ -87,7 +90,10 @@ void main() {
       findFieldLabeled(tester, 'Author').controller?.text,
       'F. Scott Fitzgerald',
     );
-    expect(findFieldLabeled(tester, 'ISBN').controller?.text, '9780743273565');
+    expect(
+      findFieldLabeled(tester, 'ISBN').controller?.text,
+      'Some publisher note',
+    );
   });
 
   testWidgets('reassigning a field moves the selection to the new line', (
@@ -117,5 +123,56 @@ void main() {
     await tester.tap(find.widgetWithText(ChoiceChip, 'Title').at(1));
     await tester.pump();
     expect(findFieldLabeled(tester, 'Title').controller?.text, 'Actual Title');
+  });
+
+  testWidgets('auto-fills the ISBN field when a line looks like one', (
+    tester,
+  ) async {
+    final repository = InMemoryBookRepository();
+    final book = await insertBookWithLines(repository, [
+      'The Great Gatsby',
+      'ISBN 978-0-14-143951-8',
+    ]);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [Provider<BookRepository>.value(value: repository)],
+        child: MaterialApp(home: BookFormScreen(existingBook: book)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Filled automatically, with the digits only — no need to tap anything.
+    expect(findFieldLabeled(tester, 'ISBN').controller?.text, '9780141439518');
+    expect(
+      find.textContaining('Looks like ISBN 9780141439518'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('tapping ISBN on a candidate line uses the extracted digits', (
+    tester,
+  ) async {
+    final repository = InMemoryBookRepository();
+    final book = await insertBookWithLines(repository, [
+      'ISBN 978-0-14-143951-8',
+      '9780446310789',
+    ]);
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [Provider<BookRepository>.value(value: repository)],
+        child: MaterialApp(home: BookFormScreen(existingBook: book)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Two different candidates, so it shouldn't guess — starts blank.
+    expect(findFieldLabeled(tester, 'ISBN').controller?.text, isEmpty);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'ISBN').at(1));
+    await tester.pump();
+
+    expect(findFieldLabeled(tester, 'ISBN').controller?.text, '9780446310789');
   });
 }

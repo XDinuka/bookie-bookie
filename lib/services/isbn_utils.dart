@@ -36,4 +36,30 @@ class IsbnUtils {
     }
     return false;
   }
+
+  /// Matches a run of digits (with optional internal hyphens/spaces, and an
+  /// optional trailing X/x check digit) long enough to plausibly be an
+  /// ISBN-10 or ISBN-13 — barcode text commonly comes out as "978-955-20-
+  /// 1234-5" or "9 780141 439518", not a bare 10/13-digit string.
+  static final RegExp _candidatePattern = RegExp(
+    r'[0-9][0-9Xx\- ]{8,16}[0-9Xx]',
+  );
+
+  /// Pulls out substrings of [text] that are shaped like an ISBN, in order
+  /// of appearance, normalized and deduplicated. An ISBN barcode is
+  /// unambiguous enough in a scanned line to find with a regex — unlike
+  /// title/author, there's no need to make the user hunt for it by hand.
+  /// This is a shape check (same caveat as [isValid]), so a stray 10 or
+  /// 13-digit number elsewhere on the cover can still slip through; the
+  /// caller should treat these as suggestions, not a confirmed ISBN.
+  static List<String> extractCandidates(String text) {
+    final candidates = <String>[];
+    for (final match in _candidatePattern.allMatches(text)) {
+      final normalized = normalize(match.group(0)!);
+      if (isValid(normalized) && !candidates.contains(normalized)) {
+        candidates.add(normalized);
+      }
+    }
+    return candidates;
+  }
 }

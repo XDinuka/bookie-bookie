@@ -48,4 +48,36 @@ void main() {
       expect(IsbnUtils.isSriLankan('080442957X'), isFalse);
     });
   });
+
+  group('extractCandidates', () {
+    test('finds a bare ISBN-13 embedded in surrounding text', () {
+      expect(IsbnUtils.extractCandidates('ISBN 9780141439518'), [
+        '9780141439518',
+      ]);
+    });
+
+    test('finds a hyphenated ISBN-13', () {
+      expect(IsbnUtils.extractCandidates('ISBN 978-0-14-143951-8'), [
+        '9780141439518',
+      ]);
+    });
+
+    test('finds a barcode-style spaced ISBN-13', () {
+      expect(IsbnUtils.extractCandidates('9 780141 439518'), ['9780141439518']);
+    });
+
+    test('finds a hyphenated ISBN-10 with an X check digit', () {
+      expect(IsbnUtils.extractCandidates('ISBN 0-8044-2957-X'), ['080442957X']);
+    });
+
+    test('returns nothing for a line with no ISBN-shaped text', () {
+      expect(IsbnUtils.extractCandidates('The Great Gatsby'), isEmpty);
+    });
+
+    test('dedupes repeated occurrences within the same line', () {
+      expect(IsbnUtils.extractCandidates('9780141439518 / 9780141439518'), [
+        '9780141439518',
+      ]);
+    });
+  });
 }
