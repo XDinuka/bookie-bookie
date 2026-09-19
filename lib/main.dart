@@ -5,6 +5,7 @@ import 'data/book_repository.dart';
 import 'data/sqlite_book_repository.dart';
 import 'screens/catalog_screen.dart';
 import 'services/extraction_queue.dart';
+import 'services/ml_kit_text_extractor.dart';
 import 'services/photo_storage_service.dart';
 
 void main() {
@@ -21,8 +22,10 @@ class BookieBookieApp extends StatelessWidget {
         Provider<BookRepository>(create: (_) => SqliteBookRepository()),
         Provider<PhotoStorageService>(create: (_) => PhotoStorageService()),
         Provider<ExtractionQueue>(
-          create: (context) =>
-              ExtractionQueue(repository: context.read<BookRepository>()),
+          create: (context) => ExtractionQueue(
+            repository: context.read<BookRepository>(),
+            extractor: MlKitTextExtractor(),
+          ),
         ),
       ],
       child: MaterialApp(

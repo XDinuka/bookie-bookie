@@ -6,10 +6,8 @@ import 'text_extraction_service.dart';
 /// any single one — capture moves on immediately, results land whenever
 /// they land.
 class ExtractionQueue {
-  ExtractionQueue({
-    required this.repository,
-    TextExtractor? extractor,
-  }) : _extractor = extractor ?? NoOpTextExtractor();
+  ExtractionQueue({required this.repository, TextExtractor? extractor})
+    : _extractor = extractor ?? NoOpTextExtractor();
 
   final BookRepository repository;
   final TextExtractor _extractor;
@@ -34,6 +32,7 @@ class ExtractionQueue {
         title: result.title ?? book.title,
         author: result.author ?? book.author,
         isbn: result.isbn ?? book.isbn,
+        ocrLines: result.lines.isEmpty ? book.ocrLines : result.lines,
         updatedAt: DateTime.now(),
       ),
     );

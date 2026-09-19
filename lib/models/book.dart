@@ -18,6 +18,12 @@ class Book {
   /// page/etc.) — kept even after extraction so the user can re-check them.
   final List<String> extraPhotoPaths;
 
+  /// Raw text lines OCR found across those photos, in detection order with
+  /// exact duplicates removed. The review screen shows these so the user
+  /// can pick which line is the title/author/ISBN themselves, rather than
+  /// trusting an automated guess.
+  final List<String> ocrLines;
+
   /// True while this entry hasn't been confirmed by the user yet: either
   /// background extraction hasn't finished, or it has and produced only a
   /// best guess that still needs a human look.
@@ -34,6 +40,7 @@ class Book {
     this.coverUrl,
     this.coverImagePath,
     this.extraPhotoPaths = const [],
+    this.ocrLines = const [],
     this.needsReview = false,
     required this.createdAt,
     required this.updatedAt,
@@ -49,6 +56,7 @@ class Book {
     String? coverUrl,
     String? coverImagePath,
     List<String>? extraPhotoPaths,
+    List<String>? ocrLines,
     bool? needsReview,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -61,6 +69,7 @@ class Book {
       coverUrl: coverUrl ?? this.coverUrl,
       coverImagePath: coverImagePath ?? this.coverImagePath,
       extraPhotoPaths: extraPhotoPaths ?? this.extraPhotoPaths,
+      ocrLines: ocrLines ?? this.ocrLines,
       needsReview: needsReview ?? this.needsReview,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -76,6 +85,7 @@ class Book {
       'cover_url': coverUrl,
       'cover_image_path': coverImagePath,
       'extra_photo_paths': jsonEncode(extraPhotoPaths),
+      'ocr_lines': jsonEncode(ocrLines),
       'needs_review': needsReview ? 1 : 0,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
@@ -87,6 +97,10 @@ class Book {
     final decodedPhotos = (rawPhotos == null || rawPhotos.isEmpty)
         ? const <String>[]
         : List<String>.from(jsonDecode(rawPhotos) as List);
+    final rawOcrLines = map['ocr_lines'] as String?;
+    final decodedOcrLines = (rawOcrLines == null || rawOcrLines.isEmpty)
+        ? const <String>[]
+        : List<String>.from(jsonDecode(rawOcrLines) as List);
     return Book(
       id: map['id'] as int?,
       isbn: map['isbn'] as String?,
@@ -95,6 +109,7 @@ class Book {
       coverUrl: map['cover_url'] as String?,
       coverImagePath: map['cover_image_path'] as String?,
       extraPhotoPaths: decodedPhotos,
+      ocrLines: decodedOcrLines,
       needsReview: (map['needs_review'] as int) == 1,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),

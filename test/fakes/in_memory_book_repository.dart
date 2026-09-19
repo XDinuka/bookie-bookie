@@ -15,20 +15,7 @@ class InMemoryBookRepository implements BookRepository {
   @override
   Future<int> insert(Book book) async {
     final id = _nextId++;
-    _books.add(
-      Book(
-        id: id,
-        isbn: book.isbn,
-        title: book.title,
-        author: book.author,
-        coverUrl: book.coverUrl,
-        coverImagePath: book.coverImagePath,
-        extraPhotoPaths: book.extraPhotoPaths,
-        needsReview: book.needsReview,
-        createdAt: book.createdAt,
-        updatedAt: book.updatedAt,
-      ),
-    );
+    _books.add(book.copyWith(id: id));
     return id;
   }
 

@@ -112,6 +112,30 @@ void main() {
     expect(updated.needsReview, isFalse);
   });
 
+  test('insert then getAll round-trips ocrLines', () async {
+    final now = DateTime.now();
+    await repository.insert(
+      Book(
+        needsReview: true,
+        ocrLines: const [
+          'THE GREAT GATSBY',
+          'F. Scott Fitzgerald',
+          'garbled spine text',
+        ],
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    final saved = (await repository.getAll()).single;
+
+    expect(saved.ocrLines, [
+      'THE GREAT GATSBY',
+      'F. Scott Fitzgerald',
+      'garbled spine text',
+    ]);
+  });
+
   test('delete removes the entry', () async {
     final id = await repository.insert(newBook(title: 'Gone Soon'));
 

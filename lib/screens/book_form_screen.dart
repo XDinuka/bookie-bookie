@@ -42,7 +42,14 @@ class _BookFormScreenState extends State<BookFormScreen> {
   String? _coverImagePath;
   String? _coverUrl;
   List<String> _extraPhotoPaths = const [];
+  List<String> _ocrLines = const [];
   bool _saving = false;
+
+  // Which detected line (if any) the user has assigned to each field, so
+  // the matching chip can show as selected.
+  int? _titleLineIndex;
+  int? _authorLineIndex;
+  int? _isbnLineIndex;
 
   @override
   void initState() {
@@ -60,6 +67,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _coverImagePath = existing?.coverImagePath;
     _coverUrl = existing?.coverUrl ?? widget.initialMetadata?.coverUrl;
     _extraPhotoPaths = existing?.extraPhotoPaths ?? const [];
+    _ocrLines = existing?.ocrLines ?? const [];
   }
 
   @override
@@ -84,6 +92,23 @@ class _BookFormScreenState extends State<BookFormScreen> {
     });
   }
 
+  void _assignLine(int index, _OcrField field) {
+    final text = _ocrLines[index];
+    setState(() {
+      switch (field) {
+        case _OcrField.title:
+          _titleController.text = text;
+          _titleLineIndex = index;
+        case _OcrField.author:
+          _authorController.text = text;
+          _authorLineIndex = index;
+        case _OcrField.isbn:
+          _isbnController.text = text;
+          _isbnLineIndex = index;
+      }
+    });
+  }
+
   Future<void> _save() async {
     setState(() => _saving = true);
     final repository = context.read<BookRepository>();
@@ -103,6 +128,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
       coverImagePath: _coverImagePath,
       coverUrl: _coverUrl,
       extraPhotoPaths: _extraPhotoPaths,
+      ocrLines: _ocrLines,
       needsReview: false,
       createdAt: widget.existingBook?.createdAt ?? now,
       updatedAt: now,
@@ -179,6 +205,22 @@ class _BookFormScreenState extends State<BookFormScreen> {
               ),
             ),
           ),
+          if (_ocrLines.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            Text(
+              'Detected text — tap a line to fill a field below',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            for (var index = 0; index < _ocrLines.length; index++)
+              _OcrLineCard(
+                text: _ocrLines[index],
+                titleSelected: _titleLineIndex == index,
+                authorSelected: _authorLineIndex == index,
+                isbnSelected: _isbnLineIndex == index,
+                onAssign: (field) => _assignLine(index, field),
+              ),
+          ],
           const SizedBox(height: 16),
           TextField(
             controller: _titleController,
@@ -278,6 +320,65 @@ class _CoverPlaceholder extends StatelessWidget {
       height: size,
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       child: const Icon(Icons.menu_book, size: 48),
+    );
+  }
+}
+
+enum _OcrField { title, author, isbn }
+
+/// One OCR-detected line, with a chip per field the user can file it under.
+/// Exactly one line can be selected for a given field at a time — tapping a
+/// chip on a different line just moves that field's selection.
+class _OcrLineCard extends StatelessWidget {
+  const _OcrLineCard({
+    required this.text,
+    required this.titleSelected,
+    required this.authorSelected,
+    required this.isbnSelected,
+    required this.onAssign,
+  });
+
+  final String text;
+  final bool titleSelected;
+  final bool authorSelected;
+  final bool isbnSelected;
+  final ValueChanged<_OcrField> onAssign;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(text),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                ChoiceChip(
+                  label: const Text('Title'),
+                  selected: titleSelected,
+                  onSelected: (_) => onAssign(_OcrField.title),
+                ),
+                ChoiceChip(
+                  label: const Text('Author'),
+                  selected: authorSelected,
+                  onSelected: (_) => onAssign(_OcrField.author),
+                ),
+                ChoiceChip(
+                  label: const Text('ISBN'),
+                  selected: isbnSelected,
+                  onSelected: (_) => onAssign(_OcrField.isbn),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -31,7 +31,7 @@ class DatabaseHelper {
         _explicitPath ?? join(await getDatabasesPath(), 'bookie_bookie.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE books (
@@ -42,12 +42,20 @@ class DatabaseHelper {
             cover_url TEXT,
             cover_image_path TEXT,
             extra_photo_paths TEXT NOT NULL DEFAULT '[]',
+            ocr_lines TEXT NOT NULL DEFAULT '[]',
             needs_review INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
           )
         ''');
         await db.execute('CREATE INDEX idx_books_isbn ON books (isbn)');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+            "ALTER TABLE books ADD COLUMN ocr_lines TEXT NOT NULL DEFAULT '[]'",
+          );
+        }
       },
     );
   }
