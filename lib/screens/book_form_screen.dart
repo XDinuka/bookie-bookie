@@ -35,6 +35,11 @@ class BookFormScreen extends StatefulWidget {
   State<BookFormScreen> createState() => _BookFormScreenState();
 }
 
+/// A single word (or ISBN barcode fragment) from a detected line, addressed
+/// by its position, so a selection can span multiple lines in any
+/// combination.
+typedef _WordRef = (int line, int word);
+
 class _BookFormScreenState extends State<BookFormScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _authorController;
@@ -44,18 +49,18 @@ class _BookFormScreenState extends State<BookFormScreen> {
   String? _coverUrl;
   List<String> _extraPhotoPaths = const [];
   List<String> _ocrLines = const [];
+  List<List<String>> _lineWords = const [];
   bool _saving = false;
-
-  // Which detected line (if any) the user has assigned to each field, so
-  // the matching chip can show as selected.
-  int? _titleLineIndex;
-  int? _authorLineIndex;
-  int? _isbnLineIndex;
 
   // Line index -> the ISBN-shaped substring a regex found in that line, if
   // any. An ISBN barcode is unambiguous enough to detect automatically,
   // unlike title/author which genuinely need a human to pick.
   final Map<int, String> _isbnCandidates = {};
+
+  // Words currently tapped, building up toward being assigned to a field.
+  // Only membership matters, not tap order — the assigned text always reads
+  // in original line/word order regardless of the order they were tapped.
+  final Set<_WordRef> _selection = {};
 
   @override
   void initState() {
@@ -74,6 +79,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _coverUrl = existing?.coverUrl ?? widget.initialMetadata?.coverUrl;
     _extraPhotoPaths = existing?.extraPhotoPaths ?? const [];
     _ocrLines = existing?.ocrLines ?? const [];
+    _lineWords = [for (final line in _ocrLines) line.split(RegExp(r'\s+'))];
 
     for (var i = 0; i < _ocrLines.length; i++) {
       final found = IsbnUtils.extractCandidates(_ocrLines[i]);
@@ -81,14 +87,12 @@ class _BookFormScreenState extends State<BookFormScreen> {
     }
 
     // Auto-fill the ISBN field when every detected candidate agrees on the
-    // same number — still just a suggestion (the user can pick a different
-    // line's chip instead), but a confident, unambiguous one.
+    // same number — still just a suggestion (the user can select different
+    // words instead), but a confident, unambiguous one.
     if (_isbnController.text.isEmpty && _isbnCandidates.isNotEmpty) {
       final distinct = _isbnCandidates.values.toSet();
       if (distinct.length == 1) {
-        final firstIndex = _isbnCandidates.keys.first;
-        _isbnController.text = _isbnCandidates[firstIndex]!;
-        _isbnLineIndex = firstIndex;
+        _isbnController.text = distinct.first;
       }
     }
   }
@@ -115,22 +119,56 @@ class _BookFormScreenState extends State<BookFormScreen> {
     });
   }
 
-  void _assignLine(int index, _OcrField field) {
+  void _toggleWord(int lineIndex, int wordIndex) {
+    setState(() {
+      final ref = (lineIndex, wordIndex);
+      if (!_selection.remove(ref)) _selection.add(ref);
+    });
+  }
+
+  void _toggleWholeLine(int lineIndex) {
+    setState(() {
+      final wordCount = _lineWords[lineIndex].length;
+      final refs = [for (var w = 0; w < wordCount; w++) (lineIndex, w)];
+      final allSelected = refs.every(_selection.contains);
+      if (allSelected) {
+        _selection.removeAll(refs);
+      } else {
+        _selection.addAll(refs);
+      }
+    });
+  }
+
+  /// The current selection's words, in original document order (not tap
+  /// order), joined with single spaces.
+  String get _selectionText {
+    final sorted = _selection.toList()
+      ..sort((a, b) {
+        final lineCompare = a.$1.compareTo(b.$1);
+        return lineCompare != 0 ? lineCompare : a.$2.compareTo(b.$2);
+      });
+    return sorted.map((ref) => _lineWords[ref.$1][ref.$2]).join(' ');
+  }
+
+  void _commitSelection(_OcrField field) {
+    if (_selection.isEmpty) return;
+    final joined = _selectionText;
     setState(() {
       switch (field) {
         case _OcrField.title:
-          _titleController.text = _ocrLines[index];
-          _titleLineIndex = index;
+          _titleController.text = joined;
         case _OcrField.author:
-          _authorController.text = _ocrLines[index];
-          _authorLineIndex = index;
+          _authorController.text = joined;
         case _OcrField.isbn:
-          // Prefer the extracted digits over the raw line — the line might
+          // Prefer the extracted digits over the raw selection — it might
           // read "ISBN 978-955-20-1234-5" and the field wants just the
           // number.
-          _isbnController.text = _isbnCandidates[index] ?? _ocrLines[index];
-          _isbnLineIndex = index;
+          final candidates = IsbnUtils.extractCandidates(joined);
+          _isbnController.text = candidates.isNotEmpty
+              ? candidates.first
+              : joined;
       }
+      _selection.clear();
     });
   }
 
@@ -233,19 +271,24 @@ class _BookFormScreenState extends State<BookFormScreen> {
           if (_ocrLines.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text(
-              'Detected text — tap a line to fill a field below',
+              'Detected text — tap words to build a value, then assign it',
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 8),
             for (var index = 0; index < _ocrLines.length; index++)
-              _OcrLineCard(
-                text: _ocrLines[index],
+              _OcrLineWords(
+                words: _lineWords[index],
                 isbnCandidate: _isbnCandidates[index],
-                titleSelected: _titleLineIndex == index,
-                authorSelected: _authorLineIndex == index,
-                isbnSelected: _isbnLineIndex == index,
-                onAssign: (field) => _assignLine(index, field),
+                isWordSelected: (word) => _selection.contains((index, word)),
+                onToggleWord: (word) => _toggleWord(index, word),
+                onToggleWholeLine: () => _toggleWholeLine(index),
               ),
+            const SizedBox(height: 8),
+            _SelectionBar(
+              previewText: _selection.isEmpty ? null : _selectionText,
+              onAssign: _commitSelection,
+              onClear: () => setState(_selection.clear),
+            ),
           ],
           const SizedBox(height: 16),
           TextField(
@@ -352,25 +395,22 @@ class _CoverPlaceholder extends StatelessWidget {
 
 enum _OcrField { title, author, isbn }
 
-/// One OCR-detected line, with a chip per field the user can file it under.
-/// Exactly one line can be selected for a given field at a time — tapping a
-/// chip on a different line just moves that field's selection.
-class _OcrLineCard extends StatelessWidget {
-  const _OcrLineCard({
-    required this.text,
+/// One detected line, rendered as tappable word chips plus a "select whole
+/// line" shortcut for the common case where the whole line is one field.
+class _OcrLineWords extends StatelessWidget {
+  const _OcrLineWords({
+    required this.words,
     this.isbnCandidate,
-    required this.titleSelected,
-    required this.authorSelected,
-    required this.isbnSelected,
-    required this.onAssign,
+    required this.isWordSelected,
+    required this.onToggleWord,
+    required this.onToggleWholeLine,
   });
 
-  final String text;
+  final List<String> words;
   final String? isbnCandidate;
-  final bool titleSelected;
-  final bool authorSelected;
-  final bool isbnSelected;
-  final ValueChanged<_OcrField> onAssign;
+  final bool Function(int wordIndex) isWordSelected;
+  final ValueChanged<int> onToggleWord;
+  final VoidCallback onToggleWholeLine;
 
   @override
   Widget build(BuildContext context) {
@@ -381,7 +421,34 @@ class _OcrLineCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(text),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      for (var i = 0; i < words.length; i++)
+                        ChoiceChip(
+                          label: Text(words[i]),
+                          selected: isWordSelected(i),
+                          onSelected: (_) => onToggleWord(i),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.checklist),
+                  tooltip: 'Select whole line',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onToggleWholeLine,
+                ),
+              ],
+            ),
             if (isbnCandidate != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -390,26 +457,71 @@ class _OcrLineCard extends StatelessWidget {
                     ?.copyWith(fontStyle: FontStyle.italic),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows the in-progress word selection and lets the user file it under a
+/// field. Scrolls with the rest of the form rather than staying docked —
+/// simpler to build and, for the short OCR outputs this screen deals with,
+/// rarely far from view.
+class _SelectionBar extends StatelessWidget {
+  const _SelectionBar({
+    required this.previewText,
+    required this.onAssign,
+    required this.onClear,
+  });
+
+  final String? previewText;
+  final ValueChanged<_OcrField> onAssign;
+  final VoidCallback onClear;
+
+  bool get _hasSelection => previewText != null;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _hasSelection
+                  ? 'Selected: $previewText'
+                  : 'Tap words above, then assign them to a field',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 4,
               children: [
-                ChoiceChip(
-                  label: const Text('Title'),
-                  selected: titleSelected,
-                  onSelected: (_) => onAssign(_OcrField.title),
+                FilledButton.tonal(
+                  onPressed: _hasSelection
+                      ? () => onAssign(_OcrField.title)
+                      : null,
+                  child: const Text('→ Title'),
                 ),
-                ChoiceChip(
-                  label: const Text('Author'),
-                  selected: authorSelected,
-                  onSelected: (_) => onAssign(_OcrField.author),
+                FilledButton.tonal(
+                  onPressed: _hasSelection
+                      ? () => onAssign(_OcrField.author)
+                      : null,
+                  child: const Text('→ Author'),
                 ),
-                ChoiceChip(
-                  label: const Text('ISBN'),
-                  selected: isbnSelected,
-                  onSelected: (_) => onAssign(_OcrField.isbn),
+                FilledButton.tonal(
+                  onPressed: _hasSelection
+                      ? () => onAssign(_OcrField.isbn)
+                      : null,
+                  child: const Text('→ ISBN'),
                 ),
+                if (_hasSelection)
+                  TextButton(onPressed: onClear, child: const Text('Clear')),
               ],
             ),
           ],

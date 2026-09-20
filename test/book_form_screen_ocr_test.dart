@@ -45,82 +45,119 @@ void main() {
     );
   }
 
-  testWidgets('tapping a detected line fills the matching field', (
-    tester,
-  ) async {
-    final repository = InMemoryBookRepository();
-    // A third line that isn't ISBN-shaped, so this test stays focused on
-    // generic tap-to-assign and doesn't overlap with the auto-fill tests
-    // below.
-    final book = await insertBookWithLines(repository, [
-      'The Great Gatsby',
-      'F. Scott Fitzgerald',
-      'Some publisher note',
-    ]);
-
+  Future<void> pumpForm(WidgetTester tester, Book book) async {
     await tester.pumpWidget(
       MultiProvider(
-        providers: [Provider<BookRepository>.value(value: repository)],
+        providers: [
+          Provider<BookRepository>.value(value: InMemoryBookRepository()),
+        ],
         child: MaterialApp(home: BookFormScreen(existingBook: book)),
       ),
     );
     await tester.pumpAndSettle();
+  }
 
-    // All three detected lines should be shown for the user to pick from.
-    expect(find.text('The Great Gatsby'), findsOneWidget);
-    expect(find.text('F. Scott Fitzgerald'), findsOneWidget);
-    expect(find.text('Some publisher note'), findsOneWidget);
+  testWidgets('selecting a word and assigning it fills the field', (
+    tester,
+  ) async {
+    final repository = InMemoryBookRepository();
+    final book = await insertBookWithLines(repository, ['The Great Gatsby']);
+    await pumpForm(tester, book);
 
-    // Fields start blank.
-    expect(findFieldLabeled(tester, 'Title').controller?.text, isEmpty);
+    // All words of the line should be shown as individually tappable chips.
+    expect(find.widgetWithText(ChoiceChip, 'The'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Great'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'Gatsby'), findsOneWidget);
 
-    // Assign each detected line to a field via its chip.
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Title').first);
+    // Nothing selected yet, so the assign buttons are disabled.
+    final titleButtonBefore = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, '→ Title'),
+    );
+    expect(titleButtonBefore.onPressed, isNull);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'The'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Author').at(1));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Great'));
     await tester.pump();
-    await tester.tap(find.widgetWithText(ChoiceChip, 'ISBN').at(2));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Gatsby'));
+    await tester.pump();
+
+    expect(find.text('Selected: The Great Gatsby'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, '→ Title'));
     await tester.pump();
 
     expect(
       findFieldLabeled(tester, 'Title').controller?.text,
       'The Great Gatsby',
     );
+    // Assigning clears the working selection.
     expect(
-      findFieldLabeled(tester, 'Author').controller?.text,
-      'F. Scott Fitzgerald',
-    );
-    expect(
-      findFieldLabeled(tester, 'ISBN').controller?.text,
-      'Some publisher note',
+      find.text('Tap words above, then assign them to a field'),
+      findsOneWidget,
     );
   });
 
-  testWidgets('reassigning a field moves the selection to the new line', (
+  testWidgets(
+    'combines words picked from two different lines, in document order',
+    (tester) async {
+      final repository = InMemoryBookRepository();
+      final book = await insertBookWithLines(repository, ['John', 'Smith']);
+      await pumpForm(tester, book);
+
+      // Tap out of document order; the assigned text should still read in
+      // document order, not tap order.
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Smith'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ChoiceChip, 'John'));
+      await tester.pump();
+
+      expect(find.text('Selected: John Smith'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, '→ Author'));
+      await tester.pump();
+
+      expect(findFieldLabeled(tester, 'Author').controller?.text, 'John Smith');
+    },
+  );
+
+  testWidgets('the whole-line shortcut selects and deselects every word', (
     tester,
   ) async {
     final repository = InMemoryBookRepository();
-    final book = await insertBookWithLines(repository, [
-      'Wrong Title Guess',
-      'Actual Title',
-    ]);
+    final book = await insertBookWithLines(repository, ['Some publisher note']);
+    await pumpForm(tester, book);
 
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [Provider<BookRepository>.value(value: repository)],
-        child: MaterialApp(home: BookFormScreen(existingBook: book)),
-      ),
-    );
-    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.checklist));
+    await tester.pump();
+    expect(find.text('Selected: Some publisher note'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Title').at(0));
+    // Tapping again deselects the whole line.
+    await tester.tap(find.byIcon(Icons.checklist));
     await tester.pump();
     expect(
-      findFieldLabeled(tester, 'Title').controller?.text,
-      'Wrong Title Guess',
+      find.text('Tap words above, then assign them to a field'),
+      findsOneWidget,
     );
+  });
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Title').at(1));
+  testWidgets('reassigning a field just overwrites its text', (tester) async {
+    final repository = InMemoryBookRepository();
+    final book = await insertBookWithLines(repository, [
+      'Wrong Guess',
+      'Actual Title',
+    ]);
+    await pumpForm(tester, book);
+
+    await tester.tap(find.byIcon(Icons.checklist).at(0));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '→ Title'));
+    await tester.pump();
+    expect(findFieldLabeled(tester, 'Title').controller?.text, 'Wrong Guess');
+
+    await tester.tap(find.byIcon(Icons.checklist).at(1));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '→ Title'));
     await tester.pump();
     expect(findFieldLabeled(tester, 'Title').controller?.text, 'Actual Title');
   });
@@ -133,14 +170,7 @@ void main() {
       'The Great Gatsby',
       'ISBN 978-0-14-143951-8',
     ]);
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [Provider<BookRepository>.value(value: repository)],
-        child: MaterialApp(home: BookFormScreen(existingBook: book)),
-      ),
-    );
-    await tester.pumpAndSettle();
+    await pumpForm(tester, book);
 
     // Filled automatically, with the digits only — no need to tap anything.
     expect(findFieldLabeled(tester, 'ISBN').controller?.text, '9780141439518');
@@ -150,7 +180,7 @@ void main() {
     );
   });
 
-  testWidgets('tapping ISBN on a candidate line uses the extracted digits', (
+  testWidgets('assigning a selected ISBN line uses the extracted digits', (
     tester,
   ) async {
     final repository = InMemoryBookRepository();
@@ -158,19 +188,14 @@ void main() {
       'ISBN 978-0-14-143951-8',
       '9780446310789',
     ]);
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [Provider<BookRepository>.value(value: repository)],
-        child: MaterialApp(home: BookFormScreen(existingBook: book)),
-      ),
-    );
-    await tester.pumpAndSettle();
+    await pumpForm(tester, book);
 
     // Two different candidates, so it shouldn't guess — starts blank.
     expect(findFieldLabeled(tester, 'ISBN').controller?.text, isEmpty);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, 'ISBN').at(1));
+    await tester.tap(find.byIcon(Icons.checklist).at(1));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '→ ISBN'));
     await tester.pump();
 
     expect(findFieldLabeled(tester, 'ISBN').controller?.text, '9780446310789');
