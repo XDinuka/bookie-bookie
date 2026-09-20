@@ -12,7 +12,7 @@ abstract class BookRepository {
   Future<Book?> getByIsbn(String isbn);
   Future<List<Book>> getAll();
 
-  /// Filters by title, author, or ISBN — the only management the README
-  /// calls for. Empty/blank query returns the full catalog.
+  /// Filters by title, author, ISBN, or tag. Empty/blank query returns the
+  /// full catalog.
   Future<List<Book>> search(String query);
 }

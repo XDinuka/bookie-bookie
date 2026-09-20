@@ -56,7 +56,8 @@ class InMemoryBookRepository implements BookRepository {
     return _books.where((book) {
       return (book.title?.toLowerCase().contains(trimmed) ?? false) ||
           (book.author?.toLowerCase().contains(trimmed) ?? false) ||
-          (book.isbn?.toLowerCase().contains(trimmed) ?? false);
+          (book.isbn?.toLowerCase().contains(trimmed) ?? false) ||
+          book.tags.any((tag) => tag.toLowerCase().contains(trimmed));
     }).toList();
   }
 }

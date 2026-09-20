@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../data/book_repository.dart';
 import '../models/book.dart';
+import '../models/popular_genres.dart';
 import '../models/reading_status.dart';
 import '../services/isbn_lookup_service.dart';
 import '../services/isbn_utils.dart';
@@ -53,6 +54,13 @@ class _BookFormScreenState extends State<BookFormScreen> {
   List<List<String>> _lineWords = const [];
   bool _saving = false;
   late ReadingStatus _readingStatus;
+  late List<String> _tags;
+
+  // Tags used anywhere else in the catalog, offered as autocomplete
+  // suggestions alongside the popular-genres list — loaded once, best
+  // effort (an empty catalog or a failed fetch just means fewer
+  // suggestions, not a broken form).
+  Set<String> _knownTags = const {};
 
   // Line index -> the ISBN-shaped substring a regex found in that line, if
   // any. An ISBN barcode is unambiguous enough to detect automatically,
@@ -81,6 +89,8 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _coverUrl = existing?.coverUrl ?? widget.initialMetadata?.coverUrl;
     _extraPhotoPaths = existing?.extraPhotoPaths ?? const [];
     _readingStatus = existing?.readingStatus ?? ReadingStatus.toRead;
+    _tags = List.of(existing?.tags ?? const []);
+    _loadKnownTags();
     _ocrLines = existing?.ocrLines ?? const [];
     _lineWords = [for (final line in _ocrLines) line.split(RegExp(r'\s+'))];
 
@@ -120,6 +130,41 @@ class _BookFormScreenState extends State<BookFormScreen> {
       _coverImagePath = savedPath;
       _coverUrl = null; // the fresh photo replaces any online cover
     });
+  }
+
+  Future<void> _loadKnownTags() async {
+    final books = await context.read<BookRepository>().getAll();
+    if (!mounted) return;
+    setState(() {
+      _knownTags = {for (final book in books) ...book.tags};
+    });
+  }
+
+  void _addTag(String raw) {
+    final tag = raw.trim();
+    if (tag.isEmpty) return;
+    final alreadyAdded = _tags.any(
+      (existing) => existing.toLowerCase() == tag.toLowerCase(),
+    );
+    if (alreadyAdded) return;
+    setState(() => _tags.add(tag));
+  }
+
+  void _removeTag(String tag) {
+    setState(() => _tags.remove(tag));
+  }
+
+  Iterable<String> _tagSuggestions(String query) {
+    final notAlreadyAdded = <String>{...popularGenres, ..._knownTags}.where(
+      (candidate) => !_tags.any(
+        (existing) => existing.toLowerCase() == candidate.toLowerCase(),
+      ),
+    );
+    final trimmed = query.trim().toLowerCase();
+    if (trimmed.isEmpty) return notAlreadyAdded.take(8);
+    return notAlreadyAdded
+        .where((candidate) => candidate.toLowerCase().contains(trimmed))
+        .take(8);
   }
 
   void _toggleWord(int lineIndex, int wordIndex) {
@@ -197,6 +242,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
       ocrLines: _ocrLines,
       needsReview: false,
       readingStatus: _readingStatus,
+      tags: _tags,
       createdAt: widget.existingBook?.createdAt ?? now,
       updatedAt: now,
     );
@@ -323,6 +369,15 @@ class _BookFormScreenState extends State<BookFormScreen> {
             selected: {_readingStatus},
             onSelectionChanged: (selected) =>
                 setState(() => _readingStatus = selected.first),
+          ),
+          const SizedBox(height: 20),
+          Text('Tags', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          _TagEditor(
+            tags: _tags,
+            suggestionsFor: _tagSuggestions,
+            onAdd: _addTag,
+            onRemove: _removeTag,
           ),
           if (_extraPhotoPaths.isNotEmpty) ...[
             const SizedBox(height: 20),
@@ -476,6 +531,77 @@ class _OcrLineWords extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Existing tags as removable chips, plus a text field with autocomplete
+/// suggestions (popular genres + tags already used elsewhere in the
+/// catalog) for adding new ones. Typing something that matches no
+/// suggestion and submitting still adds it — tags aren't limited to the
+/// suggested list.
+class _TagEditor extends StatelessWidget {
+  const _TagEditor({
+    required this.tags,
+    required this.suggestionsFor,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<String> tags;
+  final Iterable<String> Function(String query) suggestionsFor;
+  final ValueChanged<String> onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    // Autocomplete sets the field's text to whatever was selected but
+    // never clears it; capturing the controller it hands fieldViewBuilder
+    // lets onSelected clear it too, so the field is ready for the next tag
+    // immediately instead of showing the just-added one.
+    TextEditingController? fieldController;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (tags.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final tag in tags)
+                InputChip(label: Text(tag), onDeleted: () => onRemove(tag)),
+            ],
+          ),
+        if (tags.isNotEmpty) const SizedBox(height: 8),
+        Autocomplete<String>(
+          optionsBuilder: (value) => suggestionsFor(value.text),
+          onSelected: (selection) {
+            onAdd(selection);
+            fieldController?.clear();
+          },
+          fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+            fieldController = controller;
+            return TextField(
+              controller: controller,
+              focusNode: focusNode,
+              decoration: const InputDecoration(
+                labelText: 'Add a tag',
+                hintText: 'Genre or anything else',
+              ),
+              onSubmitted: (value) {
+                onAdd(value);
+                controller.clear();
+                // Deliberately not calling the framework's onFieldSubmitted:
+                // it tries to auto-select whichever option is currently
+                // highlighted, which races with the controller.clear()
+                // above and can throw once the options list it captured
+                // goes stale. We already commit whatever was typed above.
+              },
+            );
+          },
+        ),
+      ],
     );
   }
 }

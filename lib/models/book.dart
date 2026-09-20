@@ -35,6 +35,10 @@ class Book {
   /// reading, or read.
   final ReadingStatus readingStatus;
 
+  /// Freeform labels — genres or anything else the user wants. Not limited
+  /// to a fixed list.
+  final List<String> tags;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -49,6 +53,7 @@ class Book {
     this.ocrLines = const [],
     this.needsReview = false,
     this.readingStatus = ReadingStatus.toRead,
+    this.tags = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -66,6 +71,7 @@ class Book {
     List<String>? ocrLines,
     bool? needsReview,
     ReadingStatus? readingStatus,
+    List<String>? tags,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -80,6 +86,7 @@ class Book {
       ocrLines: ocrLines ?? this.ocrLines,
       needsReview: needsReview ?? this.needsReview,
       readingStatus: readingStatus ?? this.readingStatus,
+      tags: tags ?? this.tags,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -97,20 +104,18 @@ class Book {
       'ocr_lines': jsonEncode(ocrLines),
       'needs_review': needsReview ? 1 : 0,
       'reading_status': readingStatus.name,
+      'tags': jsonEncode(tags),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
   }
 
+  static List<String> _decodeStringList(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const [];
+    return List<String>.from(jsonDecode(raw) as List);
+  }
+
   factory Book.fromMap(Map<String, Object?> map) {
-    final rawPhotos = map['extra_photo_paths'] as String?;
-    final decodedPhotos = (rawPhotos == null || rawPhotos.isEmpty)
-        ? const <String>[]
-        : List<String>.from(jsonDecode(rawPhotos) as List);
-    final rawOcrLines = map['ocr_lines'] as String?;
-    final decodedOcrLines = (rawOcrLines == null || rawOcrLines.isEmpty)
-        ? const <String>[]
-        : List<String>.from(jsonDecode(rawOcrLines) as List);
     return Book(
       id: map['id'] as int?,
       isbn: map['isbn'] as String?,
@@ -118,10 +123,11 @@ class Book {
       author: map['author'] as String?,
       coverUrl: map['cover_url'] as String?,
       coverImagePath: map['cover_image_path'] as String?,
-      extraPhotoPaths: decodedPhotos,
-      ocrLines: decodedOcrLines,
+      extraPhotoPaths: _decodeStringList(map['extra_photo_paths']),
+      ocrLines: _decodeStringList(map['ocr_lines']),
       needsReview: (map['needs_review'] as int) == 1,
       readingStatus: ReadingStatus.fromName(map['reading_status'] as String?),
+      tags: _decodeStringList(map['tags']),
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
     );

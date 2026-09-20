@@ -23,13 +23,26 @@ class BookListTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text(
-        [
-          book.author,
-          book.isbn,
-        ].where((s) => s != null && s.isNotEmpty).join(' · '),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            [
+              book.author,
+              book.isbn,
+            ].where((s) => s != null && s.isNotEmpty).join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (book.tags.isNotEmpty)
+            Text(
+              book.tags.join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
       ),
       trailing: Column(
         mainAxisSize: MainAxisSize.min,

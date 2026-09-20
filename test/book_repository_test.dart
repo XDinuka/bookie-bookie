@@ -152,6 +152,39 @@ void main() {
     },
   );
 
+  test('insert then getAll round-trips tags', () async {
+    final now = DateTime.now();
+    await repository.insert(
+      Book(
+        title: 'Tagged Book',
+        tags: const ['Fiction', 'Sinhala Literature'],
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    final saved = (await repository.getAll()).single;
+
+    expect(saved.tags, ['Fiction', 'Sinhala Literature']);
+  });
+
+  test('search matches a tag', () async {
+    await repository.insert(
+      Book(
+        title: 'Tagged Book',
+        tags: const ['Sinhala Literature'],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+    await repository.insert(newBook(title: 'Untagged Book'));
+
+    final results = await repository.search('Sinhala');
+
+    expect(results, hasLength(1));
+    expect(results.first.title, 'Tagged Book');
+  });
+
   test('delete removes the entry', () async {
     final id = await repository.insert(newBook(title: 'Gone Soon'));
 

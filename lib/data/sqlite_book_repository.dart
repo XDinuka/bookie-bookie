@@ -75,8 +75,11 @@ class SqliteBookRepository implements BookRepository {
     final like = '%$trimmed%';
     final rows = await db.query(
       'books',
-      where: 'title LIKE ? OR author LIKE ? OR isbn LIKE ?',
-      whereArgs: [like, like, like],
+      // tags is a JSON-encoded list, but for plain alphanumeric tag text a
+      // substring match against the raw JSON still works fine and avoids
+      // needing a separate tags table just for search.
+      where: 'title LIKE ? OR author LIKE ? OR isbn LIKE ? OR tags LIKE ?',
+      whereArgs: [like, like, like, like],
       orderBy: 'updated_at DESC',
     );
     return rows.map(Book.fromMap).toList();
