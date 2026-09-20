@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../data/book_repository.dart';
 import '../models/book.dart';
+import '../models/reading_status.dart';
 import '../widgets/book_list_tile.dart';
 import 'book_form_screen.dart';
 import 'manual_entry_screen.dart';
@@ -22,6 +23,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
   final _searchController = TextEditingController();
   List<Book> _books = const [];
   bool _loading = true;
+
+  // null means "All" — no status filter applied.
+  ReadingStatus? _statusFilter;
+
+  List<Book> get _visibleBooks => _statusFilter == null
+      ? _books
+      : _books.where((book) => book.readingStatus == _statusFilter).toList();
 
   @override
   void initState() {
@@ -126,17 +134,47 @@ class _CatalogScreenState extends State<CatalogScreen> {
               onChanged: (_) => _reload(),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: const Text('All'),
+                      selected: _statusFilter == null,
+                      onSelected: (_) => setState(() => _statusFilter = null),
+                    ),
+                  ),
+                  for (final status in ReadingStatus.values)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(status.label),
+                        selected: _statusFilter == status,
+                        onSelected: (_) =>
+                            setState(() => _statusFilter = status),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _books.isEmpty
-                ? const _EmptyState()
+                : _visibleBooks.isEmpty
+                ? _EmptyState(filtered: _statusFilter != null)
                 : ListView.separated(
-                    itemCount: _books.length,
+                    itemCount: _visibleBooks.length,
                     separatorBuilder: (context, index) =>
                         const Divider(height: 1),
                     itemBuilder: (context, index) {
-                      final book = _books[index];
+                      final book = _visibleBooks[index];
                       return Dismissible(
                         key: ValueKey(book.id),
                         direction: DismissDirection.endToStart,
@@ -179,7 +217,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
 enum _AddChoice { scan, manual, photos }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({required this.filtered});
+
+  final bool filtered;
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +227,7 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          'No books yet. Tap + to scan a barcode, type an ISBN, or capture photos.',
+          filtered ? 'No books with this status.' : 'No books yet. Tap + to scan a barcode, type an ISBN, or capture photos.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyLarge,
         ),

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../data/book_repository.dart';
 import '../models/book.dart';
+import '../models/reading_status.dart';
 import '../services/isbn_lookup_service.dart';
 import '../services/isbn_utils.dart';
 import '../services/photo_storage_service.dart';
@@ -51,6 +52,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
   List<String> _ocrLines = const [];
   List<List<String>> _lineWords = const [];
   bool _saving = false;
+  late ReadingStatus _readingStatus;
 
   // Line index -> the ISBN-shaped substring a regex found in that line, if
   // any. An ISBN barcode is unambiguous enough to detect automatically,
@@ -78,6 +80,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _coverImagePath = existing?.coverImagePath;
     _coverUrl = existing?.coverUrl ?? widget.initialMetadata?.coverUrl;
     _extraPhotoPaths = existing?.extraPhotoPaths ?? const [];
+    _readingStatus = existing?.readingStatus ?? ReadingStatus.toRead;
     _ocrLines = existing?.ocrLines ?? const [];
     _lineWords = [for (final line in _ocrLines) line.split(RegExp(r'\s+'))];
 
@@ -193,6 +196,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
       extraPhotoPaths: _extraPhotoPaths,
       ocrLines: _ocrLines,
       needsReview: false,
+      readingStatus: _readingStatus,
       createdAt: widget.existingBook?.createdAt ?? now,
       updatedAt: now,
     );
@@ -307,6 +311,18 @@ class _BookFormScreenState extends State<BookFormScreen> {
             controller: _isbnController,
             decoration: const InputDecoration(labelText: 'ISBN'),
             keyboardType: TextInputType.text,
+          ),
+          const SizedBox(height: 20),
+          Text('Status', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          SegmentedButton<ReadingStatus>(
+            segments: [
+              for (final status in ReadingStatus.values)
+                ButtonSegment(value: status, label: Text(status.label)),
+            ],
+            selected: {_readingStatus},
+            onSelectionChanged: (selected) =>
+                setState(() => _readingStatus = selected.first),
           ),
           if (_extraPhotoPaths.isNotEmpty) ...[
             const SizedBox(height: 20),

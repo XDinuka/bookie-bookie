@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'reading_status.dart';
+
 /// A single catalog entry.
 ///
 /// Cover art can come from either an online lookup (`coverUrl`) or a photo
@@ -29,6 +31,10 @@ class Book {
   /// best guess that still needs a human look.
   final bool needsReview;
 
+  /// Where this book stands in the user's reading life: wishlist, to-read,
+  /// reading, or read.
+  final ReadingStatus readingStatus;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -42,6 +48,7 @@ class Book {
     this.extraPhotoPaths = const [],
     this.ocrLines = const [],
     this.needsReview = false,
+    this.readingStatus = ReadingStatus.toRead,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -58,6 +65,7 @@ class Book {
     List<String>? extraPhotoPaths,
     List<String>? ocrLines,
     bool? needsReview,
+    ReadingStatus? readingStatus,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -71,6 +79,7 @@ class Book {
       extraPhotoPaths: extraPhotoPaths ?? this.extraPhotoPaths,
       ocrLines: ocrLines ?? this.ocrLines,
       needsReview: needsReview ?? this.needsReview,
+      readingStatus: readingStatus ?? this.readingStatus,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -87,6 +96,7 @@ class Book {
       'extra_photo_paths': jsonEncode(extraPhotoPaths),
       'ocr_lines': jsonEncode(ocrLines),
       'needs_review': needsReview ? 1 : 0,
+      'reading_status': readingStatus.name,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -111,6 +121,7 @@ class Book {
       extraPhotoPaths: decodedPhotos,
       ocrLines: decodedOcrLines,
       needsReview: (map['needs_review'] as int) == 1,
+      readingStatus: ReadingStatus.fromName(map['reading_status'] as String?),
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
     );

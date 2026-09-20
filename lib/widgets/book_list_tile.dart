@@ -31,12 +31,23 @@ class BookListTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: book.needsReview
-          ? const Chip(
+      trailing: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            book.readingStatus.label,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+          if (book.needsReview) ...[
+            const SizedBox(height: 4),
+            const Chip(
               label: Text('Needs review'),
               visualDensity: VisualDensity.compact,
-            )
-          : null,
+            ),
+          ],
+        ],
+      ),
     );
   }
 

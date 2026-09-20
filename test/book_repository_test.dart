@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:bookie_bookie/data/database_helper.dart';
 import 'package:bookie_bookie/data/sqlite_book_repository.dart';
 import 'package:bookie_bookie/models/book.dart';
+import 'package:bookie_bookie/models/reading_status.dart';
 
 void main() {
   sqfliteFfiInit();
@@ -135,6 +136,21 @@ void main() {
       'garbled spine text',
     ]);
   });
+
+  test(
+    'defaults readingStatus to toRead and round-trips a chosen one',
+    () async {
+      final id = await repository.insert(newBook(title: 'Untouched Status'));
+      final defaulted = await repository.getById(id);
+      expect(defaulted!.readingStatus, ReadingStatus.toRead);
+
+      await repository.update(
+        defaulted.copyWith(readingStatus: ReadingStatus.reading),
+      );
+      final updated = await repository.getById(id);
+      expect(updated!.readingStatus, ReadingStatus.reading);
+    },
+  );
 
   test('delete removes the entry', () async {
     final id = await repository.insert(newBook(title: 'Gone Soon'));

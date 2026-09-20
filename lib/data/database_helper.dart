@@ -31,7 +31,7 @@ class DatabaseHelper {
         _explicitPath ?? join(await getDatabasesPath(), 'bookie_bookie.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE books (
@@ -44,6 +44,7 @@ class DatabaseHelper {
             extra_photo_paths TEXT NOT NULL DEFAULT '[]',
             ocr_lines TEXT NOT NULL DEFAULT '[]',
             needs_review INTEGER NOT NULL DEFAULT 0,
+            reading_status TEXT NOT NULL DEFAULT 'toRead',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
           )
@@ -54,6 +55,11 @@ class DatabaseHelper {
         if (oldVersion < 2) {
           await db.execute(
             "ALTER TABLE books ADD COLUMN ocr_lines TEXT NOT NULL DEFAULT '[]'",
+          );
+        }
+        if (oldVersion < 3) {
+          await db.execute(
+            "ALTER TABLE books ADD COLUMN reading_status TEXT NOT NULL DEFAULT 'toRead'",
           );
         }
       },

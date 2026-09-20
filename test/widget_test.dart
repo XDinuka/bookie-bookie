@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:bookie_bookie/data/book_repository.dart';
 import 'package:bookie_bookie/models/book.dart';
+import 'package:bookie_bookie/models/reading_status.dart';
 import 'package:bookie_bookie/screens/catalog_screen.dart';
 import 'package:bookie_bookie/services/extraction_queue.dart';
 import 'package:bookie_bookie/services/photo_storage_service.dart';
@@ -55,5 +56,44 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pride and Prejudice'), findsNothing);
+  });
+
+  testWidgets('filters the list by reading status', (tester) async {
+    final repository = InMemoryBookRepository();
+    final now = DateTime.now();
+    await repository.insert(
+      Book(
+        title: 'Currently Reading This',
+        readingStatus: ReadingStatus.reading,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    await repository.insert(
+      Book(
+        title: 'On The Wishlist',
+        readingStatus: ReadingStatus.wishlist,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+
+    await tester.pumpWidget(buildApp(repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Currently Reading This'), findsOneWidget);
+    expect(find.text('On The Wishlist'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Reading'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Currently Reading This'), findsOneWidget);
+    expect(find.text('On The Wishlist'), findsNothing);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Currently Reading This'), findsOneWidget);
+    expect(find.text('On The Wishlist'), findsOneWidget);
   });
 }
