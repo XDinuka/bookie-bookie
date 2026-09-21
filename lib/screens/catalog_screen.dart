@@ -6,12 +6,10 @@ import '../models/book.dart';
 import '../models/reading_status.dart';
 import '../widgets/book_list_tile.dart';
 import 'book_form_screen.dart';
-import 'manual_entry_screen.dart';
-import 'photo_capture_screen.dart';
-import 'scan_screen.dart';
 
-/// The whole app's home screen: search the catalog, open an entry to
-/// review/edit it, delete it, or start one of the three add-book flows.
+/// "My Books": search the catalog, filter by reading status, and open an
+/// entry to review/edit or delete it. Adding a book lives on its own tab
+/// (see [AddBookScreen] via [HomeShell]).
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
 
@@ -76,44 +74,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
       await context.read<BookRepository>().delete(book.id!);
       await _reload();
     }
-  }
-
-  Future<void> _openAddMenu() async {
-    final choice = await showModalBottomSheet<_AddChoice>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.qr_code_scanner),
-              title: const Text('Scan barcode'),
-              onTap: () => Navigator.of(context).pop(_AddChoice.scan),
-            ),
-            ListTile(
-              leading: const Icon(Icons.keyboard),
-              title: const Text('Enter ISBN manually'),
-              onTap: () => Navigator.of(context).pop(_AddChoice.manual),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text('Capture photos'),
-              onTap: () => Navigator.of(context).pop(_AddChoice.photos),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (!mounted || choice == null) return;
-
-    final screen = switch (choice) {
-      _AddChoice.scan => const ScanScreen(),
-      _AddChoice.manual => const ManualEntryScreen(),
-      _AddChoice.photos => const PhotoCaptureScreen(),
-    };
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-    await _reload();
   }
 
   @override
@@ -206,15 +166,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddMenu,
-        child: const Icon(Icons.add),
-      ),
     );
   }
 }
-
-enum _AddChoice { scan, manual, photos }
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.filtered});
@@ -227,7 +181,7 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          filtered ? 'No books with this status.' : 'No books yet. Tap + to scan a barcode, type an ISBN, or capture photos.',
+          filtered ? 'No books with this status.' : 'No books yet. Use Add below to scan a barcode, type an ISBN, or capture photos.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyLarge,
         ),

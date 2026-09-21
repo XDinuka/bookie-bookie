@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'data/book_repository.dart';
 import 'data/sqlite_book_repository.dart';
-import 'screens/catalog_screen.dart';
+import 'screens/home_shell.dart';
 import 'services/extraction_queue.dart';
 import 'services/ml_kit_text_extractor.dart';
 import 'services/photo_storage_service.dart';
@@ -41,7 +41,7 @@ class BookieBookieApp extends StatelessWidget {
           brightness: Brightness.dark,
           useMaterial3: true,
         ),
-        home: const CatalogScreen(),
+        home: const HomeShell(),
       ),
     );
   }
