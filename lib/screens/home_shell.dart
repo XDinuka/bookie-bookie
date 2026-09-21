@@ -4,11 +4,11 @@ import 'add_book_screen.dart';
 import 'catalog_screen.dart';
 import 'settings_screen.dart';
 
-/// The app's root navigation shell: a bottom row of floating buttons
-/// switches between Add / My Books / Settings, with My Books as the
-/// default screen. Each screen stays alive via [IndexedStack], so
-/// switching tabs and back preserves things like the catalog's search
-/// text and an in-progress add flow.
+/// The app's root navigation shell: a single floating bar at the bottom —
+/// not three separate floating buttons — holds the Add / My Books /
+/// Settings destinations, with My Books as the default. Each screen stays
+/// alive via [IndexedStack], so switching tabs and back preserves things
+/// like the catalog's search text and an in-progress add flow.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -29,30 +29,35 @@ class _HomeShellState extends State<HomeShell> {
         children: const [AddBookScreen(), CatalogScreen(), SettingsScreen()],
       ),
       bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _ShellButton(
-                icon: Icons.add,
-                label: 'Add',
-                selected: _selectedIndex == 0,
-                onPressed: () => setState(() => _selectedIndex = 0),
-              ),
-              _ShellButton(
-                icon: Icons.menu_book,
-                label: 'My Books',
-                selected: _selectedIndex == 1,
-                onPressed: () => setState(() => _selectedIndex = 1),
-              ),
-              _ShellButton(
-                icon: Icons.settings,
-                label: 'Settings',
-                selected: _selectedIndex == 2,
-                onPressed: () => setState(() => _selectedIndex = 2),
-              ),
-            ],
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Material(
+          elevation: 4,
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(28),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                _ShellNavItem(
+                  icon: Icons.add,
+                  label: 'Add',
+                  selected: _selectedIndex == 0,
+                  onTap: () => setState(() => _selectedIndex = 0),
+                ),
+                _ShellNavItem(
+                  icon: Icons.menu_book,
+                  label: 'My Books',
+                  selected: _selectedIndex == 1,
+                  onTap: () => setState(() => _selectedIndex = 1),
+                ),
+                _ShellNavItem(
+                  icon: Icons.settings,
+                  label: 'Settings',
+                  selected: _selectedIndex == 2,
+                  onTap: () => setState(() => _selectedIndex = 2),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -60,46 +65,47 @@ class _HomeShellState extends State<HomeShell> {
   }
 }
 
-class _ShellButton extends StatelessWidget {
-  const _ShellButton({
+/// One segment of the floating nav bar — an equal-width tappable area
+/// inside the shared [Material]/[Row], not a standalone button.
+class _ShellNavItem extends StatelessWidget {
+  const _ShellNavItem({
     required this.icon,
     required this.label,
     required this.selected,
-    required this.onPressed,
+    required this.onTap,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
-  final VoidCallback onPressed;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FloatingActionButton(
-          heroTag:
-              null, // several FABs on screen at once; no hero animation needed
-          onPressed: onPressed,
-          backgroundColor: selected
-              ? scheme.primary
-              : scheme.surfaceContainerHighest,
-          foregroundColor: selected
-              ? scheme.onPrimary
-              : scheme.onSurfaceVariant,
-          child: Icon(icon),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: selected ? scheme.primary : null,
-            fontWeight: selected ? FontWeight.bold : null,
+    final color = selected ? scheme.primary : scheme.onSurfaceVariant;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: color,
+                  fontWeight: selected ? FontWeight.bold : null,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }

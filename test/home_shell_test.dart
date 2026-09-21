@@ -48,38 +48,38 @@ void main() {
     await tester.pumpAndSettle();
 
     // Tapping the nav row's label text wouldn't hit anything — the label
-    // sits below the FloatingActionButton as a separate, non-tappable
-    // sibling — so target the FAB itself, identified by its icon.
-    await tester.tap(find.widgetWithIcon(FloatingActionButton, Icons.add));
+    // sits below the icon as a separate, non-tappable sibling inside the
+    // same InkWell segment — so target the segment itself, identified by
+    // its icon.
+    await tester.tap(find.widgetWithIcon(InkWell, Icons.add));
     await tester.pumpAndSettle();
     expect(find.text(addScreenTitle), findsOneWidget);
     expect(find.text('Scan barcode'), findsOneWidget);
     expect(find.text('Enter ISBN manually'), findsOneWidget);
     expect(find.text('Capture photos'), findsOneWidget);
 
-    await tester.tap(
-      find.widgetWithIcon(FloatingActionButton, Icons.settings),
-    );
+    await tester.tap(find.widgetWithIcon(InkWell, Icons.settings));
     await tester.pumpAndSettle();
     expect(find.text(settingsBody), findsOneWidget);
     expect(find.text(addScreenTitle), findsNothing);
 
-    await tester.tap(
-      find.widgetWithIcon(FloatingActionButton, Icons.menu_book),
-    );
+    await tester.tap(find.widgetWithIcon(InkWell, Icons.menu_book));
     await tester.pumpAndSettle();
     expect(find.text(catalogEmptyState), findsOneWidget);
     expect(find.text(settingsBody), findsNothing);
   });
 
-  testWidgets('there is no floating add button on My Books anymore', (
+  testWidgets('the nav is a single floating bar, not separate buttons', (
     tester,
   ) async {
     await tester.pumpWidget(buildApp());
     await tester.pumpAndSettle();
 
-    // Exactly three FABs total: the bottom nav row, none extra from the
-    // old per-screen add button.
-    expect(find.byType(FloatingActionButton), findsNWidgets(3));
+    // No standalone FloatingActionButtons anywhere — the three
+    // destinations are segments inside one shared Material bar.
+    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.widgetWithIcon(InkWell, Icons.add), findsOneWidget);
+    expect(find.widgetWithIcon(InkWell, Icons.menu_book), findsOneWidget);
+    expect(find.widgetWithIcon(InkWell, Icons.settings), findsOneWidget);
   });
 }
