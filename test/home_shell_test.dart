@@ -10,6 +10,21 @@ import 'package:bookie_bookie/services/photo_storage_service.dart';
 import 'fakes/in_memory_book_repository.dart';
 
 void main() {
+  // AddBookScreen's ListView doesn't have enough room in a normal
+  // test-sized viewport once the AppBar and the bottom nav bar eat into
+  // it, and Flutter's sliver list doesn't mount off-screen children — see
+  // book_form_screen_ocr_test.dart for the same issue. Use a tall surface.
+  setUp(() {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    binding.platformDispatcher.views.first.physicalSize = const Size(
+      1080,
+      2400,
+    );
+    binding.platformDispatcher.views.first.devicePixelRatio = 1.0;
+    addTearDown(binding.platformDispatcher.views.first.resetPhysicalSize);
+    addTearDown(binding.platformDispatcher.views.first.resetDevicePixelRatio);
+  });
+
   Widget buildApp() {
     final repository = InMemoryBookRepository();
     return MultiProvider(
