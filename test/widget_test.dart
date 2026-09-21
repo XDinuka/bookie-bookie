@@ -6,21 +6,13 @@ import 'package:bookie_bookie/data/book_repository.dart';
 import 'package:bookie_bookie/models/book.dart';
 import 'package:bookie_bookie/models/reading_status.dart';
 import 'package:bookie_bookie/screens/catalog_screen.dart';
-import 'package:bookie_bookie/services/extraction_queue.dart';
-import 'package:bookie_bookie/services/photo_storage_service.dart';
 
 import 'fakes/in_memory_book_repository.dart';
 
 void main() {
   Widget buildApp(BookRepository repository) {
     return MultiProvider(
-      providers: [
-        Provider<BookRepository>.value(value: repository),
-        Provider<PhotoStorageService>(create: (_) => PhotoStorageService()),
-        Provider<ExtractionQueue>(
-          create: (context) => ExtractionQueue(repository: repository),
-        ),
-      ],
+      providers: [Provider<BookRepository>.value(value: repository)],
       child: const MaterialApp(home: CatalogScreen()),
     );
   }

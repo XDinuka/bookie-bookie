@@ -181,7 +181,7 @@ class _EmptyState extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          filtered ? 'No books with this status.' : 'No books yet. Use Add below to scan a barcode, type an ISBN, or capture photos.',
+          filtered ? 'No books with this status.' : 'No books yet. Use Add below to scan a barcode, type an ISBN, or enter details.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyLarge,
         ),

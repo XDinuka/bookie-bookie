@@ -11,6 +11,7 @@ import '../models/reading_status.dart';
 import '../services/isbn_lookup_service.dart';
 import '../services/isbn_utils.dart';
 import '../services/photo_storage_service.dart';
+import '../services/text_extraction_service.dart';
 
 /// Create-or-edit form for a single catalog entry.
 ///
@@ -53,6 +54,7 @@ class _BookFormScreenState extends State<BookFormScreen> {
   List<String> _ocrLines = const [];
   List<List<String>> _lineWords = const [];
   bool _saving = false;
+  bool _extracting = false;
   late ReadingStatus _readingStatus;
   late List<String> _tags;
 
@@ -91,23 +93,30 @@ class _BookFormScreenState extends State<BookFormScreen> {
     _readingStatus = existing?.readingStatus ?? ReadingStatus.toRead;
     _tags = List.of(existing?.tags ?? const []);
     _loadKnownTags();
-    _ocrLines = existing?.ocrLines ?? const [];
-    _lineWords = [for (final line in _ocrLines) line.split(RegExp(r'\s+'))];
+    _applyDetectedLines(existing?.ocrLines ?? const []);
+  }
 
-    for (var i = 0; i < _ocrLines.length; i++) {
-      final found = IsbnUtils.extractCandidates(_ocrLines[i]);
+  /// Rebuilds the word-picker state (lines, per-word tokens, ISBN
+  /// candidates) from a fresh set of detected lines, and auto-fills the
+  /// ISBN field if every candidate agrees on one number and the field is
+  /// still blank. Used both for whatever the book already had on open and
+  /// for the result of a fresh extraction after adding photos.
+  void _applyDetectedLines(List<String> lines) {
+    _ocrLines = lines;
+    _lineWords = [for (final line in lines) line.split(RegExp(r'\s+'))];
+    _isbnCandidates.clear();
+    for (var i = 0; i < lines.length; i++) {
+      final found = IsbnUtils.extractCandidates(lines[i]);
       if (found.isNotEmpty) _isbnCandidates[i] = found.first;
     }
-
-    // Auto-fill the ISBN field when every detected candidate agrees on the
-    // same number — still just a suggestion (the user can select different
-    // words instead), but a confident, unambiguous one.
     if (_isbnController.text.isEmpty && _isbnCandidates.isNotEmpty) {
       final distinct = _isbnCandidates.values.toSet();
       if (distinct.length == 1) {
         _isbnController.text = distinct.first;
       }
     }
+    // Old selection indices may no longer correspond to the same words.
+    _selection.clear();
   }
 
   @override
@@ -129,6 +138,34 @@ class _BookFormScreenState extends State<BookFormScreen> {
     setState(() {
       _coverImagePath = savedPath;
       _coverUrl = null; // the fresh photo replaces any online cover
+    });
+  }
+
+  /// Takes one more photo for this book and re-runs text extraction over
+  /// all of its photos so far, refreshing the word-picker with whatever
+  /// turns up. Runs in the foreground with a small indicator rather than
+  /// in the background — unlike the old multi-book batch capture flow,
+  /// there's no "next book" to move on to here, so there's nothing to
+  /// avoid blocking.
+  Future<void> _addPhoto() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+    if (picked == null || !mounted) return;
+    final saved = await context.read<PhotoStorageService>().saveImage(
+      picked.path,
+    );
+    if (!mounted) return;
+    setState(() {
+      _extraPhotoPaths = [..._extraPhotoPaths, saved];
+      _extracting = true;
+    });
+
+    final result = await context.read<TextExtractor>().extract(
+      _extraPhotoPaths,
+    );
+    if (!mounted) return;
+    setState(() {
+      _extracting = false;
+      _applyDetectedLines(result.lines);
     });
   }
 
@@ -283,11 +320,19 @@ class _BookFormScreenState extends State<BookFormScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  String get _appBarTitle {
+    if (widget.isEditing) return 'Edit book';
+    if (widget.initialIsbn == null && widget.initialMetadata == null) {
+      return 'Add book details';
+    }
+    return 'Confirm details';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit book' : 'Confirm details'),
+        title: Text(_appBarTitle),
         actions: [
           if (widget.isEditing)
             IconButton(
@@ -318,6 +363,52 @@ class _BookFormScreenState extends State<BookFormScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 20),
+          Text(
+            'Photos for text detection',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 96,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (final path in _extraPhotoPaths)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        File(path),
+                        width: 96,
+                        height: 96,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                _AddPhotoTile(onTap: _extracting ? null : _addPhoto),
+              ],
+            ),
+          ),
+          if (_extracting) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Detecting text...',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ],
           if (_ocrLines.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text(
@@ -379,31 +470,6 @@ class _BookFormScreenState extends State<BookFormScreen> {
             onAdd: _addTag,
             onRemove: _removeTag,
           ),
-          if (_extraPhotoPaths.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            Text(
-              'Captured photos',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 96,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _extraPhotoPaths.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 8),
-                itemBuilder: (context, index) => ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(
-                    File(_extraPhotoPaths[index]),
-                    width: 96,
-                    height: 96,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-          ],
           const SizedBox(height: 24),
           FilledButton(
             onPressed: _saving ? null : _save,
@@ -668,6 +734,32 @@ class _SelectionBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The "take another photo" tile appended after existing photo thumbnails.
+class _AddPhotoTile extends StatelessWidget {
+  const _AddPhotoTile({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 96,
+        height: 96,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: Icon(Icons.add_a_photo_outlined, color: scheme.onSurfaceVariant),
       ),
     );
   }

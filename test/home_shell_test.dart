@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 
 import 'package:bookie_bookie/data/book_repository.dart';
 import 'package:bookie_bookie/screens/home_shell.dart';
-import 'package:bookie_bookie/services/extraction_queue.dart';
 import 'package:bookie_bookie/services/photo_storage_service.dart';
+import 'package:bookie_bookie/services/text_extraction_service.dart';
 
 import 'fakes/in_memory_book_repository.dart';
 
@@ -31,9 +31,7 @@ void main() {
       providers: [
         Provider<BookRepository>.value(value: repository),
         Provider<PhotoStorageService>(create: (_) => PhotoStorageService()),
-        Provider<ExtractionQueue>(
-          create: (context) => ExtractionQueue(repository: repository),
-        ),
+        Provider<TextExtractor>(create: (_) => NoOpTextExtractor()),
       ],
       child: const MaterialApp(home: HomeShell()),
     );
@@ -43,7 +41,7 @@ void main() {
   // always on screen regardless of which tab is active, so assertions use
   // content unique to each tab's body instead.
   const catalogEmptyState =
-      'No books yet. Use Add below to scan a barcode, type an ISBN, or capture photos.';
+      'No books yet. Use Add below to scan a barcode, type an ISBN, or enter details.';
   const addScreenTitle = 'Add a book';
   const settingsBody = 'Nothing here yet.';
 
@@ -71,7 +69,7 @@ void main() {
     expect(find.text(addScreenTitle), findsOneWidget);
     expect(find.text('Scan barcode'), findsOneWidget);
     expect(find.text('Enter ISBN manually'), findsOneWidget);
-    expect(find.text('Capture photos'), findsOneWidget);
+    expect(find.text('Enter details manually'), findsOneWidget);
 
     await tester.tap(find.widgetWithIcon(InkWell, Icons.settings));
     await tester.pumpAndSettle();

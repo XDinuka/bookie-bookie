@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import 'book_form_screen.dart';
 import 'manual_entry_screen.dart';
-import 'photo_capture_screen.dart';
 import 'scan_screen.dart';
 
-/// The three ways to add a book, per the README: scan a barcode, type an
-/// ISBN, or capture photos for a book barcode lookup won't have data for.
+/// Three ways to add a book: scan a barcode, type just the ISBN (with a
+/// lookup), or type everything by hand. Photo capture for OCR-assisted
+/// extraction isn't a separate add flow — it lives inside a single book's
+/// view (see [BookFormScreen]) since it's something you do to one book you
+/// already have open, not a way of starting one.
 class AddBookScreen extends StatelessWidget {
   const AddBookScreen({super.key});
 
@@ -32,14 +35,14 @@ class AddBookScreen extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.camera_alt_outlined),
-            title: const Text('Capture photos'),
+            leading: const Icon(Icons.edit_note),
+            title: const Text('Enter details manually'),
             subtitle: const Text(
-              "For books where barcode lookup won't have data",
+              "For books with no ISBN, or when lookup won't have data",
             ),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PhotoCaptureScreen()),
-            ),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const BookFormScreen())),
           ),
         ],
       ),
