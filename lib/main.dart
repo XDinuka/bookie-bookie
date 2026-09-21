@@ -9,6 +9,7 @@ import 'services/ml_kit_text_extractor.dart';
 import 'services/photo_storage_service.dart';
 import 'services/sinhala_aware_text_extractor.dart';
 import 'services/tesseract_sinhala_extractor.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const BookieBookieApp());
@@ -35,12 +36,8 @@ class BookieBookieApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'Bookie Bookie',
-        theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
-        darkTheme: ThemeData(
-          colorSchemeSeed: Colors.teal,
-          brightness: Brightness.dark,
-          useMaterial3: true,
-        ),
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
         home: const HomeShell(),
       ),
     );
